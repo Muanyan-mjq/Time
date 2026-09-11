@@ -28,7 +28,11 @@ import 'package:flutter/services.dart';
 /// 所以它是独立一页，不是首页里的一段。首页一屏只放得下三条，
 /// 三十条要滑十屏才看得完，那不叫「看大局」。
 ///
-/// 顶上压一条概览带，把全部记录压成一条点带：一辈子有多长、哪几年密、
+/// 每条记录是一张卡片：左边封面缩略图，右边标题、日期和倒计时；年份是
+/// 左对齐的分节标题（`2027 · 3`）。缩略图代替了上一版那颗 30px 的圆点，
+/// 轴也从 1px 加粗到 2px —— 一行里有东西可看，轴也看得见了。
+///
+/// 顶上压一条概览带，把全部记录按时间摊成一把尺子：一生有多长、哪几年密、
 /// 现在看的是哪一段，一眼就有。带子和下面的列表是同一份数据的两面 ——
 /// 滚动时带上高亮跟着走，点带上任意一处就跳过去。
 class TimelinePage extends StatefulWidget {
@@ -210,7 +214,7 @@ class _TimelinePageState extends State<TimelinePage> {
   Widget _buildAxis(BuildContext context, TimelinePlan plan) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 一屏装得下就不摆概览带：那条带子的全部意义是「你在整段里的哪儿」，
+        // 一屏装得下就不摆概览带：那把尺子的全部意义是「你在整段里的哪儿」，
         // 内容还没一屏长的时候，它只会是一块占地方的装饰
         final scrolls = plan.height > constraints.maxHeight - kTimelineBandHeight;
         final viewport = constraints.maxHeight - (scrolls ? kTimelineBandHeight : 0);
@@ -246,25 +250,29 @@ class _TimelinePageState extends State<TimelinePage> {
 
   /// 那条竖轴。整条固定不动地铺满视口，只有两端渐隐 —— 轴在视口之外还长着，
   /// 断在屏幕边上比断在某条记录上更像话。
+  ///
+  /// 它画的不是分割线，是这条轴本身，所以比 `divider` 深一档、也粗一档：
+  /// 上一版那根 1px 的浅线在浅底上基本看不见。
   Widget _buildAxisLine(BuildContext context) {
     final colors = AppColors.of(context);
     return Positioned(
-      left: kTimelineAxisX - 0.5,
+      left: kTimelineAxisX - kTimelineAxisWidth / 2,
       top: 0,
       bottom: 0,
-      width: 1,
+      width: kTimelineAxisWidth,
       child: DecoratedBox(
         decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(kTimelineAxisWidth / 2),
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              colors.divider.withValues(alpha: 0),
-              colors.divider,
-              colors.divider,
-              colors.divider.withValues(alpha: 0),
+              colors.onBackgroundFaint.withValues(alpha: 0),
+              colors.onBackgroundFaint,
+              colors.onBackgroundFaint,
+              colors.onBackgroundFaint.withValues(alpha: 0),
             ],
-            stops: const [0, 0.06, 0.94, 1],
+            stops: const [0, 0.05, 0.95, 1],
           ),
         ),
       ),
@@ -276,7 +284,8 @@ class _TimelinePageState extends State<TimelinePage> {
       controller: _scroll,
       // 顶上不留 padding：行的 y 必须和 `TimelinePlan.topOf` 逐像素对上，
       // 概览带的高亮和点按跳转全靠这个等式。底下留一点空地，
-      // 让最后一条不必贴着屏幕底边（手势条那截 SafeArea 已经让过了）
+      // 让最后一条不必贴着屏幕底边（手势条那截 SafeArea 已经让过了）。
+      // 行与行之间的空当不在这儿，在每一行自己的下半截里。
       padding: const EdgeInsets.only(bottom: 24),
       itemCount: plan.rows.length,
       itemBuilder: (context, i) => _buildRow(context, plan.rows[i]),
@@ -284,11 +293,16 @@ class _TimelinePageState extends State<TimelinePage> {
   }
 
   Widget _buildRow(BuildContext context, TimelineRow row) => switch (row) {
-        YearRow(:final year) => _buildYearRow(context, year),
+        YearRow() => _buildYearRow(context, row),
         TodayRow() => _buildTodayRow(context),
         RecordRow() => _buildRecordRow(context, row),
       };
 
+  /// 一条记录：一张卡片，左边封面缩略图，右边标题和「日期 · 倒计时」。
+  ///
+  /// 卡片左边那截空当里有一枚小结节，落在竖轴上、对着卡片的竖直中心 ——
+  /// 卡片就是从那儿挂出去的。用 Stack 而不是 Row 摆它：结点要对齐的是
+  /// 「轴」那条线，不是左边那截空当的中心，差值 6px 一眼就能看出来。
   Widget _buildRecordRow(BuildContext context, RecordRow row) {
     final colors = AppColors.of(context);
     final styles = AppTextStyles.of(context);
@@ -299,127 +313,186 @@ class _TimelinePageState extends State<TimelinePage> {
     );
     return SizedBox(
       height: kTimelineRowHeight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _openDetail(row.daily),
-        child: Row(
-          children: [
-            SizedBox(
-              width: kTimelineAxisX * 2,
-              child: Center(child: _buildDot(context, cover)),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.daily.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: styles.aboutMiddleStyle,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    fmtMonthDay(row.day),
-                    style: styles.aboutBottomStyle.copyWith(color: colors.onBackgroundMuted),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              countdownLabel(row.signedDays),
-              style: styles.groupTitleStyle.copyWith(
-                color: row.isToday ? colors.onBackground : colors.onBackgroundMuted,
-              ),
-            ),
-            const SizedBox(width: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDot(BuildContext context, Cover cover) {
-    // 圆点只有 30dp 上下，按它真正占的物理像素解码，别为这点大的圆圈
-    // 把整张照片（最长边 1600）读进内存
-    final decodeWidth = (kTimelineDotSize * MediaQuery.devicePixelRatioOf(context)).round();
-    return Container(
-      width: kTimelineDotSize,
-      height: kTimelineDotSize,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        // 和底色同色的一圈：圆点压在竖轴上时把那截线断开，像打了个孔
-        border: Border.all(color: AppColors.of(context).background, width: 2),
-      ),
-      child: ClipOval(child: CoverView(cover: cover, decodeWidth: decodeWidth)),
-    );
-  }
-
-  /// 年份刻度。数字写在轴的左边，刻度压在轴上 —— 盒子从
-  /// `kTimelineAxisX - 6` 起、宽 12，正中正好落在轴线上。
-  Widget _buildYearRow(BuildContext context, int year) {
-    final colors = AppColors.of(context);
-    return SizedBox(
-      height: kTimelineYearRowHeight,
-      child: Row(
+      child: Stack(
         children: [
-          SizedBox(
-            width: kTimelineAxisX - 6,
-            child: Text(
-              '$year',
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              style: AppTextStyles.of(context).aboutStyle.copyWith(color: colors.onBackgroundMuted),
-            ),
-          ),
-          SizedBox(
-            width: 12,
-            child: Center(
-              child: Container(
-                // 宽度要写死：Container 没有子节点时会被压成 0 宽，
-                // 刻度就成了一条看不见的线
-                width: 12,
-                height: 2,
+          Positioned(
+            left: kTimelineContentLeft,
+            right: kTimelineContentRight,
+            top: 0,
+            height: kTimelineCardHeight,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _openDetail(row.daily),
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colors.onBackgroundMuted,
-                  borderRadius: BorderRadius.circular(1),
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(kTimelineCardRadius),
+                  border: Border.all(color: colors.divider),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(kTimelineCardPadding),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(kTimelineThumbRadius),
+                        child: SizedBox(
+                          width: kTimelineThumbSize,
+                          height: kTimelineThumbSize,
+                          // 缩略图只有 72dp 见方，按它真正占的物理像素解码。
+                          // 相册照片最长边 1600，一屏十来张全尺寸进内存就是
+                          // 上百 MB，滚动时还会反复冲 ImageCache。
+                          child: CoverView(
+                            cover: cover,
+                            decodeWidth:
+                                (kTimelineThumbSize * MediaQuery.devicePixelRatioOf(context))
+                                    .round(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.daily.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: styles.aboutMiddleStyle.copyWith(fontWeight: FontWeight.w400),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                // 年份由上面那行分节标题交代，这里只写月日
+                                Text(
+                                  fmtMonthDay(row.day),
+                                  style: styles.aboutBottomStyle
+                                      .copyWith(color: colors.onBackgroundMuted),
+                                ),
+                                const SizedBox(width: 8),
+                                // 倒计时按自身宽度摆不下时收成省略号，而不是
+                                // 在卡片边上画黄黑条纹：它撑满剩下的地方、
+                                // 右对齐，所以平常看着就是贴着卡片右边缘
+                                Expanded(
+                                  child: Text(
+                                    countdownLabel(row.signedDays),
+                                    textAlign: TextAlign.right,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: styles.aboutStyle.copyWith(
+                                      color: row.isToday
+                                          ? colors.onBackground
+                                          : colors.onBackgroundMuted,
+                                      fontWeight:
+                                          row.isToday ? FontWeight.w500 : FontWeight.w100,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+          ),
+          Positioned(
+            left: kTimelineAxisX - 3,
+            top: kTimelineCardHeight / 2 - 3,
+            child: _buildNode(colors, isToday: row.isToday),
           ),
         ],
       ),
     );
   }
 
-  /// 「今天」那道横标：轴上换成一枚实心点，右边拉一条线到屏幕尽头。
+  /// 卡片挂在轴上的那枚小结节。
+  Widget _buildNode(AppColors colors, {required bool isToday}) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isToday ? colors.onBackground : colors.onBackgroundFaint,
+      ),
+    );
+  }
+
+  /// 年份分节标题：`2027 · 3 ————————`。
+  ///
+  /// 左边缘和卡片对齐，右边一截横线一直拉到屏幕边 —— 它是一节的开头，
+  /// 不该长得像一条记录。
+  Widget _buildYearRow(BuildContext context, YearRow row) {
+    final colors = AppColors.of(context);
+    final styles = AppTextStyles.of(context);
+    return SizedBox(
+      height: kTimelineYearRowHeight,
+      child: Padding(
+        padding: const EdgeInsets.only(right: kTimelineContentRight),
+        child: Row(
+          children: [
+            const SizedBox(width: kTimelineContentLeft),
+            Text(
+              '${row.year}',
+              style: styles.aboutMiddleStyle.copyWith(fontSize: 17, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '· ${row.count}',
+              style: styles.aboutBottomStyle.copyWith(color: colors.onBackgroundMuted),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Container(height: 1, color: colors.divider)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 「今天」那道横标：轴上一枚实心点，一条线拉到屏幕尽头，线上坐着「今天」。
+  ///
+  /// 文字背后垫了一层底色，把线断开 —— 不然线会从「今天」两个字中间穿过去。
   Widget _buildTodayRow(BuildContext context) {
     final colors = AppColors.of(context);
+    final styles = AppTextStyles.of(context);
+    const midY = kTimelineTodayRowHeight / 2;
     return SizedBox(
       height: kTimelineTodayRowHeight,
-      child: Row(
+      child: Stack(
         children: [
-          SizedBox(
-            width: kTimelineAxisX * 2,
-            child: Center(
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: colors.onBackground),
-              ),
+          Positioned(
+            left: kTimelineAxisX,
+            right: kTimelineContentRight,
+            top: midY - 0.5,
+            height: 1,
+            child: ColoredBox(color: colors.divider),
+          ),
+          Positioned(
+            left: kTimelineAxisX - 5,
+            top: midY - 5,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: colors.onBackground),
             ),
           ),
-          Text(
-            '今天',
-            style: AppTextStyles.of(context).aboutMiddleStyle.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 20),
-              child: Container(height: 1, color: colors.divider),
+          Positioned(
+            left: kTimelineContentLeft,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Container(
+                color: colors.background,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  '今天',
+                  style: styles.aboutMiddleStyle.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
             ),
           ),
         ],
@@ -443,11 +516,13 @@ class _TimelinePageState extends State<TimelinePage> {
   }
 }
 
-/// 顶部概览带：把全部记录按时间摊成一条点带。
+/// 顶部概览带：把全部记录按时间摊成一把尺子。
 ///
 /// 横轴是**时间本身**，不是列表位置 —— 三年没有记录就真的空出一段，
-/// 点带的疏密就是那些年攒下的东西。高亮的那块是「现在看着的这几条落在
-/// 时间上的哪一段」，所以它滚动的速度并不均匀，那是尺度的实话。
+/// 点的疏密就是那些年攒下的东西。高亮的那块是「现在看着的这几条落在
+/// 时间上的哪一段」，所以它滚动的速度并不均匀，那是尺子的实话。
+///
+/// 尺子上还刻着年份：一年一枚短刻度，挤得下就写数字，写不下就只留刻度。
 class _OverviewBand extends StatelessWidget {
   final TimelinePlan plan;
   final ValueListenable<({double offset, double viewport})> view;
@@ -457,6 +532,7 @@ class _OverviewBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     return SizedBox(
       height: kTimelineBandHeight,
       // LayoutBuilder 在外、ValueListenableBuilder 在内：点的位置只跟宽度有关，
@@ -466,6 +542,7 @@ class _OverviewBand extends StatelessWidget {
           final inner = (constraints.maxWidth - 2 * kTimelineBandPadding)
               .clamp(1.0, double.infinity);
           final dots = _buildDots(context, inner);
+          final years = _buildYearTicks(inner);
           final todayX = kTimelineBandPadding + plan.xOf(plan.today, inner);
           return ValueListenableBuilder<({double offset, double viewport})>(
             valueListenable: view,
@@ -482,10 +559,10 @@ class _OverviewBand extends StatelessWidget {
                 size: Size(constraints.maxWidth, kTimelineBandHeight),
                 painter: _BandPainter(
                   dots: dots,
+                  years: years,
                   highlight: _visibleSpan(v, inner),
                   todayX: todayX,
-                  lineColor: AppColors.of(context).divider,
-                  dotColors: AppColors.of(context),
+                  colors: colors,
                 ),
               ),
             ),
@@ -518,7 +595,13 @@ class _OverviewBand extends StatelessWidget {
     return dots;
   }
 
-  /// 视口里那几条记录占掉的时间段。一条记录都看不见（只看见年份刻度）时
+  /// 尺子上的年刻度：一年一枚，落在 1 月 1 日的位置上。
+  List<({double x, int year})> _buildYearTicks(double inner) => [
+        for (var year = plan.from.year + 1; year <= plan.to.year; year++)
+          (x: kTimelineBandPadding + plan.xOf(DateTime.utc(year, 1, 1), inner), year: year),
+      ];
+
+  /// 视口里那几条记录占掉的时间段。一条记录都看不见（只看见年份标题）时
   /// 返回 null，那时不画高亮 —— 画哪儿都是错的。
   ({double start, double end})? _visibleSpan(
     ({double offset, double viewport}) v,
@@ -541,84 +624,158 @@ class _OverviewBand extends StatelessWidget {
   }
 }
 
+/// 那把尺子。从上到下四层：年份数字、年份刻度、轨道与记录点、今天指针。
 class _BandPainter extends CustomPainter {
+  /// 记录点落在哪儿、什么颜色。
   final List<({double x, Color color})> dots;
+
+  /// 一年一枚的刻度，以及它要写的年份。
+  final List<({double x, int year})> years;
+
+  /// 现在看着的那一段，null 表示没画出高亮。
   final ({double start, double end})? highlight;
+
   final double todayX;
-  final Color lineColor;
-  final AppColors dotColors;
+  final AppColors colors;
 
   const _BandPainter({
     required this.dots,
+    required this.years,
     required this.highlight,
     required this.todayX,
-    required this.lineColor,
-    required this.dotColors,
+    required this.colors,
   });
+
+  /// 轨道的中线。整条带子 64 高，就围着它分层。
+  static const double _trackY = 32.5;
+
+  /// 只有高亮块需要知道自己的半高。
+  static const double _highlightHalf = 11.5;
+
+  /// 两个年份数字之间至少留这么多像素，挤不下就跳过 —— 一把尺子宁可
+  /// 少写几个数，也不能糊成一团。
+  static const double _yearLabelGap = 12;
+
+  static const double _yearLabelTop = 5;
+  static const double _todayLabelTop = 46;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final midY = size.height / 2;
+    final startX = kTimelineBandPadding;
+    final endX = size.width - kTimelineBandPadding;
+    if (endX <= startX) return;
 
-    // 高亮：现在看着的那一段。至少留 6px 宽，不然只剩一条记录时它会细成一根线
-    final span = highlight;
-    if (span != null) {
-      final rect = Rect.fromLTRB(
-        span.start,
-        6,
-        span.end < span.start + 6 ? span.start + 6 : span.end,
-        size.height - 6,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(4)),
-        Paint()..color = dotColors.onBackground.withValues(alpha: 0.06),
-      );
+    _paintHighlight(canvas, startX, endX);
+    _paintTrack(canvas, startX, endX);
+    _paintYears(canvas, startX, endX);
+    for (final dot in dots) {
+      canvas.drawCircle(Offset(dot.x, _trackY), kTimelineBandDot / 2, Paint()..color = dot.color);
     }
+    _paintToday(canvas, size);
+  }
 
-    // 带子自己那条轴：两端渐隐，和下面那条竖轴是同一种语气
+  /// 高亮：现在看着的那一段。至少留 12px 宽，不然只剩一条记录时它会细成一根线。
+  void _paintHighlight(Canvas canvas, double startX, double endX) {
+    final span = highlight;
+    if (span == null) return;
+    final left = span.start < startX ? startX : span.start;
+    final right = span.end > endX ? endX : span.end;
+    final rect = Rect.fromLTRB(
+      left,
+      _trackY - _highlightHalf,
+      right < left + 12 ? left + 12 : right,
+      _trackY + _highlightHalf,
+    );
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(_highlightHalf));
+    canvas.drawRRect(rrect, Paint()..color = colors.highlight.withValues(alpha: 0.08));
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = colors.highlight.withValues(alpha: 0.16),
+    );
+  }
+
+  /// 轨道自己：两端渐隐，和下面那条竖轴是同一种颜色、同一种语气。
+  ///
+  /// 不用 `divider`：高亮那块底色本身就接近分割线，轨道压上去正好糊在一起。
+  void _paintTrack(Canvas canvas, double startX, double endX) {
+    final track = colors.onBackgroundFaint;
     canvas.drawLine(
-      Offset(0, midY),
-      Offset(size.width, midY),
+      Offset(startX, _trackY),
+      Offset(endX, _trackY),
       Paint()
         ..shader = ui.Gradient.linear(
-          Offset(0, midY),
-          Offset(size.width, midY),
+          Offset(startX, _trackY),
+          Offset(endX, _trackY),
           [
-            lineColor.withValues(alpha: 0),
-            lineColor,
-            lineColor,
-            lineColor.withValues(alpha: 0),
+            track.withValues(alpha: 0),
+            track,
+            track,
+            track.withValues(alpha: 0),
           ],
-          const [0, 0.04, 0.96, 1],
+          const [0, 0.03, 0.97, 1],
         )
-        ..strokeWidth = 1,
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
     );
+  }
 
-    for (final dot in dots) {
-      canvas.drawCircle(
-        Offset(dot.x, midY),
-        kTimelineBandDot / 2,
-        Paint()..color = dot.color.withValues(alpha: 0.85),
+  void _paintYears(Canvas canvas, double startX, double endX) {
+    final tickPaint = Paint()
+      ..color = colors.onBackgroundMuted
+      ..strokeWidth = 1;
+    final labelStyle = TextStyle(
+      fontSize: 11,
+      color: colors.onBackgroundMuted,
+      fontFamily: 'Dongqing',
+    );
+    var lastRight = startX - _yearLabelGap;
+    for (final tick in years) {
+      if (tick.x < startX - 0.5 || tick.x > endX + 0.5) continue;
+      canvas.drawLine(
+        Offset(tick.x, _trackY - _highlightHalf),
+        Offset(tick.x, _trackY - 5),
+        tickPaint,
       );
+      final label = TextPainter(
+        text: TextSpan(text: '${tick.year}', style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final left = tick.x - label.width / 2;
+      if (left < lastRight + _yearLabelGap) continue;
+      if (left + label.width > endX) continue;
+      label.paint(canvas, Offset(left, _yearLabelTop));
+      lastRight = left + label.width;
     }
+  }
 
-    // 今天那枚刻线。数字写在带子顶上，右边放不下就翻到左边去
+  /// 今天那枚指针：竖线压在轨道上，数字挂在带子下半截。
+  void _paintToday(Canvas canvas, Size size) {
     canvas.drawLine(
-      Offset(todayX, 4),
-      Offset(todayX, size.height - 4),
+      Offset(todayX, _trackY - _highlightHalf),
+      Offset(todayX, _trackY + 13),
       Paint()
-        ..color = dotColors.onBackground
-        ..strokeWidth = 1.5,
+        ..color = colors.onBackground
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
     );
     final label = TextPainter(
       text: TextSpan(
         text: '今天',
-        style: TextStyle(fontSize: 10, color: dotColors.onBackground, fontFamily: 'Dongqing'),
+        style: TextStyle(
+          fontSize: 11,
+          color: colors.onBackground,
+          fontWeight: FontWeight.w500,
+          fontFamily: 'Dongqing',
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    final left = todayX + 6 + label.width > size.width ? todayX - 6 - label.width : todayX + 6;
-    label.paint(canvas, Offset(left, 2));
+    final maxLeft = size.width - label.width;
+    final left = maxLeft <= 0 ? 0.0 : (todayX - label.width / 2).clamp(0.0, maxLeft);
+    label.paint(canvas, Offset(left, _todayLabelTop));
   }
 
   @override

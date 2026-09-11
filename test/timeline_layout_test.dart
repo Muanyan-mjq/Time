@@ -139,6 +139,26 @@ void main() {
         '年 2025', '#6 2025-12-31',
       ]);
     });
+
+    test('年份标题上写着这一年有几条', () {
+      final plan = planTimeline([
+        at('2030-05-01', id: 1),
+        at('2030-01-01', id: 2),
+        at('2027-01-01', id: 3),
+        at('2026-01-01', id: 4),
+        at('2025-12-31', id: 5),
+      ], today: today);
+      expect(
+        {
+          for (final r in plan.rows)
+            if (r is YearRow) r.year: r.count,
+        },
+        {2030: 2, 2027: 1, 2025: 1},
+      );
+      // 今年那几条（落在「今天」下面）和「今天」共处一节，不再单独盖一个
+      // 年份标题，也就不进任何一节
+      expect(shape(plan), containsAllInOrder(['—— 今天 ——', '#4 2026-01-01']));
+    });
   });
 
   group('行高与滚动位置', () {
@@ -157,17 +177,17 @@ void main() {
     });
 
     test('visibleRows 取的是「和视口有交集」的那一段', () {
-      // 单条未来记录：年刻度 30 + 记录 64 + 今天 44，总高 138
+      // 单条未来记录：年份标题 46 + 记录卡片 100 + 今天 52，总高 198
       final plan = planTimeline([at('2030-01-01', id: 1)], today: today);
       expect(plan.todayIndex, 2);
-      expect(plan.height, 138);
+      expect(plan.height, 198);
 
-      expect(plan.visibleRows(0, 138), (first: 0, last: 2));
-      expect(plan.visibleRows(0, 30), (first: 0, last: 0), reason: '行底正好压在视口下沿也算看得见');
-      expect(plan.visibleRows(30, 10), (first: 1, last: 1), reason: '刻度整行在视口上方，不算');
-      expect(plan.visibleRows(94, 44), (first: 2, last: 2));
-      expect(plan.visibleRows(138, 44), isNull, reason: '滚过尾巴之后一条都看不见');
-      expect(plan.visibleRows(-50, 138), (first: 0, last: 1), reason: '回弹到负偏移时贴着头那几行');
+      expect(plan.visibleRows(0, 198), (first: 0, last: 2));
+      expect(plan.visibleRows(0, 46), (first: 0, last: 0), reason: '行底正好压在视口下沿也算看得见');
+      expect(plan.visibleRows(46, 10), (first: 1, last: 1), reason: '标题整行在视口上方，不算');
+      expect(plan.visibleRows(146, 52), (first: 2, last: 2));
+      expect(plan.visibleRows(198, 52), isNull, reason: '滚过尾巴之后一条都看不见');
+      expect(plan.visibleRows(-50, 150), (first: 0, last: 1), reason: '回弹到负偏移时贴着头那几行');
     });
   });
 

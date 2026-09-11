@@ -17,14 +17,20 @@ sealed class TimelineRow {
   double get height;
 }
 
-/// 年份分隔：轴上多出一截刻度，年份数字写在轴的左边。
+/// 年份分节：一条左对齐的分节标题，标题右边拉一条通到屏幕边的横线。
 ///
 /// 只在跨年时出现一次，不是每条记录都盖一个章。今年这一段的年份由
 /// 「今天」那道横标顺手交代，所以下面不会再重复一遍。
 final class YearRow extends TimelineRow {
   final int year;
 
-  const YearRow(this.year);
+  /// 这一年里有几条记录。首页的分组标题写「未来 · 3」，这里跟着来。
+  ///
+  /// 「今天」上下那些落在今年的记录不算 —— 它们和「今天」共处一节，
+  /// 没有自己的年份标题，也就没有一个数字挂上去的地方。
+  final int count;
+
+  const YearRow(this.year, {this.count = 0});
 
   @override
   double get height => kTimelineYearRowHeight;
@@ -38,7 +44,8 @@ final class TodayRow extends TimelineRow {
   double get height => kTimelineTodayRowHeight;
 }
 
-/// 一条记录。封面圆点压在轴上，右边是标题、日期和倒计时。
+/// 一条记录。它是一张挂在轴右边的卡片：左边封面缩略图，右边标题、日期
+/// 和倒计时。
 final class RecordRow extends TimelineRow {
   final Daily daily;
 
@@ -192,6 +199,18 @@ TimelinePlan planTimeline(List<Daily> dailies, {required DateTime today}) {
   }
   for (final e in past) {
     addRecord(e);
+  }
+
+  // 年份标题上要写「2027 · 3」，而条数只有把这一节摆完才知道。回头补一遍：
+  // 每个年份行后面紧跟着几条记录，就是它那一节的条数。
+  for (var i = 0; i < rows.length; i++) {
+    final row = rows[i];
+    if (row is! YearRow) continue;
+    var end = i + 1;
+    while (end < rows.length && rows[end] is RecordRow) {
+      end++;
+    }
+    rows[i] = YearRow(row.year, count: end - i - 1);
   }
 
   final tops = <double>[0];

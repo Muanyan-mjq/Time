@@ -97,25 +97,45 @@ const double kAboutBlobSize = 200;
 /// 时光轴：左侧一条竖轴，未来在上、今天一道横标、过去在下，可以一直往下滚。
 ///
 /// 上一版是「整条轴钉在一屏里、靠双指放大看细节」的横轴，容量有天花板，
-/// 三十条以后只能靠缩放读。这一版把轴竖过来，滚动接管容量，每条记录也就
-/// 不必再把信息挤进 92px 的标签里。
+/// 三十条以后只能靠缩放读。这一版把轴竖过来，滚动接管容量。
+///
+/// 每条记录是一张横着的小卡片（左封面、右文字），挂在轴的右边；年份是
+/// 左对齐的分节标题。上一版那条 1px 的轴和 30px 的圆点都太弱 —— 现在轴
+/// 2px、缩略图 72，一行里有东西可看。
 
-/// 竖轴离左边的距离。它同时是打孔圆点的圆心 —— 圆点、年份刻度、
-/// 「今天」那枚实心点全压在这条线上。
-const double kTimelineAxisX = 30;
+/// 竖轴（脊椎）离页面左边的距离。
+const double kTimelineAxisX = 26;
 
-/// 压在轴上的封面圆点。30 是「看得清是什么照片」和「不挡住行」的折中。
-const double kTimelineDotSize = 30;
+/// 轴的宽度，以及轴和右边内容之间的空当。
+const double kTimelineAxisWidth = 2;
+const double kTimelineCardGap = 14;
 
-/// 一条记录占的高度。**必须定高**：概览带的高亮、点按跳转、「回到今天」
-/// 的显隐全靠滚动位置反推行号，行高一浮动这套映射就得重来。
-const double kTimelineRowHeight = 64;
+/// 卡片、年份标题、「今天」三者的左边缘。它们对齐在同一条竖线上。
+const double kTimelineContentLeft = kTimelineAxisX + kTimelineCardGap;
+const double kTimelineContentRight = 16;
 
-/// 年份分隔行，以及「今天」那道横标。
-const double kTimelineYearRowHeight = 30;
-const double kTimelineTodayRowHeight = 44;
+/// 卡片左边那张封面缩略图。
+const double kTimelineThumbSize = 72;
+const double kTimelineThumbRadius = 12;
 
-/// 顶部概览带：把全部记录压成一条点带，看的是「一辈子摊开有多长、哪里密」。
-const double kTimelineBandHeight = 56;
-const double kTimelineBandPadding = 14;
-const double kTimelineBandDot = 5;
+/// 卡片本身：圆角、四周内边距（缩略图 72 + 上下各 8 = 卡片高 88）。
+const double kTimelineCardRadius = 14;
+const double kTimelineCardPadding = 8;
+const double kTimelineCardHeight = kTimelineThumbSize + 2 * kTimelineCardPadding;
+
+/// 卡片之间的空隙。行高 = 卡片高 + 空隙。
+///
+/// 行高**必须定死**：概览带的高亮、点按跳转、「回到今天」的显隐全靠滚动
+/// 位置反推行号，行高一浮动这套映射就得重来。
+const double kTimelineRowGap = 12;
+const double kTimelineRowHeight = kTimelineCardHeight + kTimelineRowGap;
+
+/// 年份分节标题行，以及「今天」那道横标。
+const double kTimelineYearRowHeight = 46;
+const double kTimelineTodayRowHeight = 52;
+
+/// 顶部概览带：把全部记录压成一把时间尺，看的是「一辈子摊开有多长、
+/// 哪里密、现在站在哪儿」。
+const double kTimelineBandHeight = 64;
+const double kTimelineBandPadding = 16;
+const double kTimelineBandDot = 8;

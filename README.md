@@ -2,12 +2,39 @@
 
 > **完全离线**的纪念日 App。记录每一个值得记住的日子。
 
+[![Release](https://img.shields.io/github/v/release/Muanyan-mjq/Time?label=Release&color=3DDC84)](https://github.com/Muanyan-mjq/Time/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.44-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.12-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 没有账号，没有云同步，没有埋点，**没有任何网络请求** —— APK 里连 `INTERNET` 权限都不申请。所有数据只存在你自己的手机上。
+
+---
+
+## 下载安装
+
+**→ [到 Releases 页面下载 APK](https://github.com/Muanyan-mjq/Time/releases/latest)**
+
+| | |
+| --- | --- |
+| **下哪个** | 最新 Release 里的 `Time-<版本号>.apk`，通用包 —— arm64-v8a / armeabi-v7a / x86_64 三个 ABI 打在一起，什么手机都装得上，代价是体积（约 66 MB） |
+| **系统要求** | Android 7.0（API 24）及以上 |
+| **怎么装** | 下载后直接点开安装。第一次装非商店应用会被系统拦一道，属正常现象，见下面四步 |
+| **升级** | 覆盖安装即可，记录 / 照片 / 设置全部保留，不用先卸载 |
+| **核对** | 每个 Release 的说明里都写着 APK 的 SHA-256，和下载到的文件对不上就别装 |
+
+安装步骤：
+
+1. 在**手机上**打开 [Releases 页面](https://github.com/Muanyan-mjq/Time/releases/latest)，点开最新版本，下载 `Time-<版本号>.apk`。
+2. 下载完成后点通知栏的提示，或到「文件管理 → 下载」里点这个文件。
+3. 系统提示「禁止安装未知来源应用」时，点**设置** → 允许浏览器（或文件管理器）安装应用 → 返回，继续安装。
+4. 装好打开，看到「未来 / 已过去」的列表就成了。版本号可以在 App 的 **关于** 页核对。
+
+> [!NOTE]
+> 国产 ROM（MIUI / ColorOS / HarmonyOS 等）还可能弹「未经安全检测」「未上架应用」之类的提示，选「继续安装 / 仍然安装」即可。这个 App 装完不需要联网就能一直用，它申请的权限只有提醒、相册和隐私锁那几条，逐条列在[提醒与权限](#提醒与权限)一节 —— 其中**没有 `INTERNET`**。
+
+每个版本改了什么，见 [CHANGELOG](./CHANGELOG.md)。
 
 ---
 
@@ -19,7 +46,7 @@
 | **计数详情** | 点按在「年月日」与「总天数」之间切换 |
 | **重复纪念日** | 每年 / 每月重复。重复的记录有两个视角：它是多久以前开始的（年龄），以及距离下一次还有多久 —— 点一下就能换过来 |
 | **提醒通知** | 「提前 N 天 + 具体时刻」。到点弹通知，重启手机后也会自动重新排上 |
-| **时光轴** | 一条竖着的轴：未来在上、今天一道横标、过去在下，一屏装不下就一直往下滚。跨年处留一行年份刻度，顶上一条概览带把全部记录按时间摊成点带，滚到哪儿高亮到哪儿，点一下就跳过去 |
+| **时光轴** | 一条竖着的轴：未来在上、今天一道横标、过去在下，一屏装不下就一直往下滚。每条记录是一张卡片（封面缩略图 + 标题 + 日期 + 倒计时），年份做成左对齐的分节标题（`2027 · 3`）。顶上一条时间尺把全部记录按时间摊开，带年份刻度，滚到哪儿高亮到哪儿，点一下就跳过去 |
 | **封面** | 6 套内置渐变（恋爱 / 家人 / 朋友 / 工作 / 学习 / 生日），也可以从相册选一张自己的照片；照片点开全屏可缩放 |
 | **分享海报** | 满幅照片 + 标题 + 日期 + 天数，输出 **1080×1920** PNG，可存相册或拉起系统分享面板 |
 | **备份与恢复** | 导出一个 zip（记录 + 全部照片），换手机时导回去。导入是**覆盖**式，动手前会先问清楚 |
@@ -91,7 +118,7 @@
 
 ```
 time-backup-20260911-1430.zip
-├── manifest.json      { schema: 1, app: 'Time', version: '1.1.0', exportedAt, count }
+├── manifest.json      { schema: 1, app: 'Time', version: '1.1.2', exportedAt, count }
 └── covers/
     └── c_1757123456789_4f2a.jpg   ← 文件名原样保留，记录里的封面字段能直接对上
 ```
@@ -157,13 +184,13 @@ const String kPosterShareUrl = kRepoUrl;
 ```bash
 flutter pub get
 flutter analyze
-flutter test        # 日期算法 / 重复规则 / 提醒排期 / 分组排序 / 封面解析与存储 / 备份 / 时光轴排版 / 日历导出 / 数据库迁移 / 主题 / 矮屏布局，192 个用例
+flutter test        # 日期算法 / 重复规则 / 提醒排期 / 分组排序 / 封面解析与存储 / 备份 / 时光轴排版 / 日历导出 / 数据库迁移 / 主题 / 矮屏布局，195 个用例
 flutter build apk --release
 ```
 
 产物：`build/app/outputs/flutter-apk/app-release.apk`
 
-想要更小的包（通用包 65.7 MB，三个 ABI 打在一起）：
+想要更小的包（通用包约 66 MB，三个 ABI 打在一起）：
 
 ```bash
 flutter build apk --release --split-per-abi   # arm64-v8a 约 31 MB、armeabi-v7a 约 29 MB

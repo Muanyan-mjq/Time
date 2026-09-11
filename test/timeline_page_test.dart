@@ -4,6 +4,7 @@ import 'package:daily/pages/detail/detail.dart';
 import 'package:daily/pages/timeline.dart';
 import 'package:daily/styles/dimens.dart';
 import 'package:daily/utils/date_util.dart';
+import 'package:daily/utils/timeline_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,6 +51,19 @@ bool _todayButtonIgnored(WidgetTester tester) => tester
     .ignoring;
 
 void main() {
+  test('行高跟着卡片走：缩略图 + 上下内边距 + 行间空隙', () {
+    expect(
+      kTimelineCardHeight,
+      kTimelineThumbSize + 2 * kTimelineCardPadding,
+      reason: '卡片高就是缩略图加上下那圈内边距',
+    );
+    expect(
+      kTimelineRowHeight,
+      kTimelineCardHeight + kTimelineRowGap,
+      reason: '卡片高多少，行高就得是多少 —— 差一像素，概览带的高亮和点按跳转就全错位',
+    );
+  });
+
   testWidgets('一条记录都没有时是空态，不是一条光秃秃的轴', (tester) async {
     await _pumpTimeline(tester, const []);
 
@@ -74,10 +88,22 @@ void main() {
     expect(find.text('今天'), findsOneWidget, reason: '「今天」那道横标只此一处');
   });
 
+  testWidgets('年份是左对齐的分节标题，标题上写着这一年有几条', (tester) async {
+    final dailies = [_rec(1, 300), _rec(2, 400), _rec(3, 500)];
+    await _pumpTimeline(tester, dailies);
+
+    final years = planTimeline(dailies, today: DateTime.now()).rows.whereType<YearRow>().toList();
+    expect(years, isNotEmpty);
+    for (final row in years) {
+      expect(find.text('${row.year}'), findsOneWidget);
+      expect(find.text('· ${row.count}'), findsOneWidget);
+    }
+  });
+
   testWidgets('一屏装得下就不摆概览带', (tester) async {
     await _pumpTimeline(tester, [_rec(1, 30), _rec(2, 0), _rec(3, -30)]);
 
-    // 概览带值 56：它不在，列表就整块拿到 600 - 48
+    // 一屏装得下时列表拿走整块高度：概览带不在，也就不占那 kTimelineBandHeight
     expect(tester.getSize(find.byType(ListView)).height, 600 - 48);
     expect(_position(tester).pixels, 0, reason: '装得下就没有可滚的，也没必要滚');
   });
