@@ -42,7 +42,7 @@ app.*.map.json
 # Exceptions to above rules.
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 
-# 原版 APK 存档（30MB，仅作本地参考，发布请走 Release 资产）
+# 本地归档的 Release APK（通用包 65.7MB，不进仓库，发布走 GitHub Release 资产）
 /apk/
 
 # 与本 App 无关的旁支目录，不进这个仓库

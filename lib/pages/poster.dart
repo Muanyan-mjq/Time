@@ -11,6 +11,7 @@ import 'package:daily/styles/colors.dart';
 import 'package:daily/styles/dimens.dart';
 import 'package:daily/styles/text_style.dart';
 import 'package:daily/utils/date_util.dart';
+import 'package:daily/utils/external_flow.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -470,7 +471,12 @@ class _PosterPageState extends State<PosterPage> {
       final dir = await getTemporaryDirectory();
       final file = File(p.join(dir.path, 'shiguang_${DateTime.now().millisecondsSinceEpoch}.png'));
       await file.writeAsBytes(bytes, flush: true);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: kAppSlogan));
+      // 分享面板是外部界面，用户可能在里面翻半天，别让它把表单顶掉
+      await ExternalFlow.run(
+        () => SharePlus.instance.share(
+          ShareParams(files: [XFile(file.path)], text: kAppSlogan),
+        ),
+      );
       await _cleanOldTempFiles(dir);
     } catch (e) {
       showToast('分享失败：$e');

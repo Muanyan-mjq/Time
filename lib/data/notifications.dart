@@ -66,6 +66,15 @@ class NotificationService {
         onDidReceiveNotificationResponse: _onTap,
       );
       _ready = true;
+
+      // 冷启动那次点按不走上面的回调：进程已经被系统杀掉时，是靠 launch
+      // details 把这次点击带回来的（插件文档写明了这个分工）。不读它，
+      // 点提醒进来就只会停在首页
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      final response = launch?.notificationResponse;
+      if ((launch?.didNotificationLaunchApp ?? false) && response != null) {
+        _onTap(response);
+      }
     } catch (e, st) {
       // 通知用不了不该拦住启动：App 其余部分完全用不着它
       FlutterError.reportError(FlutterErrorDetails(
@@ -125,9 +134,33 @@ class NotificationService {
           ? _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           : null;
 
+  bool _syncing = false;
+  bool _syncQueued = false;
+
   /// 全量重排。任何写操作、冷启动、回到前台、设置变更都会走到这儿。
+  ///
+  /// 串行 + 合并：列表一变就喊一次重排，而两次重排的「取消旧提醒」与「重新排」
+  /// 之间隔着一串 await。交叉执行时，后启动的那次会拿着旧列表把前一次刚取消的
+  /// 闹钟重新排上，`_scheduledIds` 也会被后写覆盖 —— 记录删了提醒却照响。
+  /// 所以正在跑就只记一个「还要再跑」，等这一轮结束补跑一次最新的。
   Future<void> sync() async {
     if (!_ready) return;
+    if (_syncing) {
+      _syncQueued = true;
+      return;
+    }
+    _syncing = true;
+    try {
+      do {
+        _syncQueued = false;
+        await _syncOnce();
+      } while (_syncQueued);
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  Future<void> _syncOnce() async {
     await refreshPermissionState();
 
     try {

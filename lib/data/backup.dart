@@ -28,6 +28,7 @@ import 'package:daily/data/covers.dart';
 import 'package:daily/data/daily_repository.dart';
 import 'package:daily/data/db.dart';
 import 'package:daily/model/daily.dart';
+import 'package:daily/utils/external_flow.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -243,11 +244,13 @@ class BackupService {
     try {
       // 必须走 bytes：Android 上 `saveFile` 是 SAF，由插件自己写文件，
       // 它返回的 content:// 路径不能拿 dart:io 去写
-      target = await FilePicker.saveFile(
-        fileName: backupFileName(DateTime.now()),
-        bytes: bytes,
-        mimeType: 'application/zip',
-        dialogTitle: '导出备份',
+      target = await ExternalFlow.run(
+        () => FilePicker.saveFile(
+          fileName: backupFileName(DateTime.now()),
+          bytes: bytes,
+          mimeType: 'application/zip',
+          dialogTitle: '导出备份',
+        ),
       );
     } catch (e) {
       return BackupResult.fail('保存失败：$e');
@@ -290,10 +293,12 @@ class BackupService {
 
   /// 让用户选一个备份文件并校验。返回 null 表示他取消了。
   Future<BackupPrep?> _choose() async {
-    final picked = await FilePicker.pickFile(
-      type: FileType.custom,
-      allowedExtensions: ['zip'],
-      dialogTitle: '选择备份文件',
+    final picked = await ExternalFlow.run(
+      () => FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+        dialogTitle: '选择备份文件',
+      ),
     );
     if (picked == null) return null;
     if (await picked.length() > kMaxBackupBytes) {

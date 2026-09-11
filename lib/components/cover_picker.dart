@@ -1,6 +1,7 @@
 import 'package:daily/data/cover_palette.dart';
 import 'package:daily/model/cover.dart';
 import 'package:daily/styles/colors.dart';
+import 'package:daily/styles/dimens.dart';
 import 'package:daily/styles/text_style.dart';
 import 'package:flutter/material.dart';
 
@@ -34,7 +35,7 @@ class CoverPicker extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            CoverView(cover: cover),
+            CoverView(cover: cover, decodeWidth: kCoverDecodeWidth),
             const ColoredBox(color: Color(0x4D000000)),
             // 两个状态沿用 2020 年那版的文案：选了照片显示标语，
             // 还没选就显示「选择一张背景图片」

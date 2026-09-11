@@ -63,7 +63,18 @@ class Db {
 
   Future<Database>? _opening;
 
-  Future<Database> open() => _opening ??= _open();
+  /// 失败的 Future 不能留在缓存里：留着的话之后每次读写都复用同一个异常，
+  /// 一次偶发失败（文件被占、磁盘写满）就变成永久打不开库，而 refresh 又吞
+  /// 异常 —— 界面只是静默空列表，用户完全不知道发生了什么。
+  Future<Database> open() async {
+    final future = _opening ??= _open();
+    try {
+      return await future;
+    } catch (_) {
+      if (identical(_opening, future)) _opening = null;
+      rethrow;
+    }
+  }
 
   Future<Database> _open() async {
     final path = p.join(await getDatabasesPath(), kDbFileName);

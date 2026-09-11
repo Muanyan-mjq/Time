@@ -4,6 +4,12 @@ const double kCardHeight = 200;
 const double kCardMarginH = 30;
 const double kCardMarginV = 10;
 
+/// 首页卡片封面的解码上限（物理像素）。
+///
+/// 卡片铺满屏宽，1080 够 3 倍像素比的屏用；不设的话相册照片（最长边 1600）
+/// 会整张进内存，一屏几张就是几十 MB。
+const int kCoverDecodeWidth = 1080;
+
 /// 列表滚动时封面层的最大视差位移（逻辑像素）。
 ///
 /// 封面层按「比卡片本身高出两倍这么多」来画，位移时边缘才不会露出底色。

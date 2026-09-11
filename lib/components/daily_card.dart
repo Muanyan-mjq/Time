@@ -72,7 +72,7 @@ class DailyCoverCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(kCardRadius),
             child: parallax == null
-                ? CoverView(cover: cover)
+                ? CoverView(cover: cover, decodeWidth: kCoverDecodeWidth)
                 : _ParallaxCover(shift: parallax!, cover: cover),
           ),
           // 压暗层只加在照片上：用户照片亮度不可控，不加白字就看不见。
@@ -180,7 +180,7 @@ class _ParallaxCover extends StatelessWidget {
               offset: Offset(0, dy),
               child: child,
             ),
-            child: CoverView(cover: cover),
+            child: CoverView(cover: cover, decodeWidth: kCoverDecodeWidth),
           ),
         ),
       ],

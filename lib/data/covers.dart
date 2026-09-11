@@ -4,9 +4,19 @@ import 'dart:math' as math;
 
 import 'package:daily/constants.dart';
 import 'package:daily/data/cover_palette.dart';
+import 'package:daily/utils/external_flow.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
+/// 落库原文 → 磁盘上的相对路径。
+///
+/// `coverKey` 一律带 `f:` 前缀（见 [Covers.keyFor]），而磁盘操作要的是
+/// `covers/xxx.jpg`。少剥这一道就是一个「文件明明在、却说找不到」的坑：
+/// 备份因此一张照片都打不进 zip，删除因此删不掉文件。所有入口统一走这里。
+String coverStoragePath(String stored) =>
+    stored.startsWith(kPhotoPrefix) ? stored.substring(kPhotoPrefix.length) : stored;
 
 /// 照片封面的磁盘生命周期。
 ///
@@ -20,8 +30,8 @@ class Covers {
 
   static final Covers instance = Covers._();
 
-  late final Directory _root;
-  late final Directory _dir;
+  late Directory _root;
+  late Directory _dir;
 
   /// `locate` 结果的缓存。没有它就是 30 条列表每次 build 30 次系统调用。
   final Map<String, String?> _cache = {};
@@ -32,14 +42,23 @@ class Covers {
     if (!_dir.existsSync()) await _dir.create(recursive: true);
   }
 
+  /// 仅供测试：把根目录指到临时目录，绕开 path_provider。
+  @visibleForTesting
+  void debugUseRoot(Directory root) {
+    _root = root;
+    _dir = Directory(p.join(root.path, kCoversDir));
+    _cache.clear();
+  }
+
   /// 把存储值映射成磁盘上真实存在的绝对路径，找不到返回 null。同步，供 build 期调用。
   ///
-  /// 兼容两种历史形态：新数据是 `covers/xxx.jpg` 相对路径，
-  /// v1 遗留的 imageUrl 是 image_picker 给的绝对路径。
+  /// 兼容三种历史形态：带 `f:` 前缀的落库原文、`covers/xxx.jpg` 相对路径、
+  /// 以及 v1 遗留的 imageUrl（image_picker 给的绝对路径）。
   String? locate(String stored) {
     if (stored.isEmpty) return null;
     if (_cache.containsKey(stored)) return _cache[stored];
-    final abs = p.isAbsolute(stored) ? stored : p.join(_root.path, stored);
+    final path = coverStoragePath(stored);
+    final abs = p.isAbsolute(path) ? path : p.join(_root.path, path);
     return _cache[stored] = File(abs).existsSync() ? abs : null;
   }
 
@@ -120,12 +139,14 @@ class StagedCover {
 
   /// 从相册挑一张。返回新的 coverKey；用户取消选择时返回 null。
   Future<String?> pickPhoto() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      // 限长边 + 有损压缩：原始照片动辄 5MB，几十条下去文档目录会很难看
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 88,
+    final picked = await ExternalFlow.run(
+      () => ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        // 限长边 + 有损压缩：原始照片动辄 5MB，几十条下去文档目录会很难看
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 88,
+      ),
     );
     if (picked == null) return null;
     final key = await Covers.instance.importFrom(picked.path);

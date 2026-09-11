@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:daily/model/daily.dart';
 import 'package:daily/model/repeat_rule.dart';
+import 'package:daily/utils/external_flow.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// 把一条记录导出成 `.ics`，交给系统日历去提醒。
@@ -16,39 +17,59 @@ Future<String?> exportToCalendar(Daily daily) async {
   final date = daily.date;
   if (date == null) return '这条记录没有日期，导不进日历';
 
-  // 非重复记录还落在过去的话，日历里加它只是留个念想 —— 提前说清楚，
-  // 免得用户以为会响
-  final past = daily.repeatRule == RepeatRule.none && date.isBefore(_today());
+  final plan = calendarPlan(daily, _today());
   final text = buildIcs(
     daily,
     stamp: DateTime.now().toUtc(),
     // 没有闹钟的 VEVENT 在日历里就是个安静的全天事件
-    withAlarm: !past,
+    withAlarm: plan.withAlarm,
+    past: plan.past,
   );
 
   final Uri? target;
   try {
     // 和备份一样必须走 bytes：Android 上 `saveFile` 是 SAF，
     // 由插件自己写文件，返回的 content:// 不能拿 dart:io 去写
-    target = await FilePicker.saveFile(
-      fileName: icsFileName(daily),
-      bytes: utf8.encode(text),
-      mimeType: 'text/calendar',
-      dialogTitle: '加入系统日历',
+    target = await ExternalFlow.run(
+      () => FilePicker.saveFile(
+        fileName: icsFileName(daily),
+        bytes: utf8.encode(text),
+        mimeType: 'text/calendar',
+        dialogTitle: '加入系统日历',
+      ),
     );
   } catch (e) {
     return '保存失败：$e';
   }
   if (target == null) return null;
 
-  return past ? '已导出一份历史记录，日历不会提醒它' : '已导出，打开它就能加进系统日历';
+  if (plan.past) return '已导出一份历史记录，日历不会提醒它';
+  if (!plan.withAlarm) return '已导出，提醒开关关着，日历不会响';
+  return '已导出，打开它就能加进系统日历';
+}
+
+/// 导出成日历时两个**纯**决策：要不要带闹钟、要不要标「已过去」。
+///
+/// 抽出来的理由和提醒排班一样 —— 判断能单测钉死，插件调用那部分不能。
+/// 带不带闹钟要跟 App 自己的提醒开关一致：用户在 App 里把提醒关了，
+/// 不该从系统日历里冒出来一条；一次性记录又已经过去的话，加了也只是个念想。
+({bool withAlarm, bool past}) calendarPlan(Daily daily, DateTime today) {
+  final date = daily.date;
+  if (date == null) return (withAlarm: false, past: false);
+  final past = daily.repeatRule == RepeatRule.none && date.isBefore(today);
+  return (withAlarm: !past && daily.remindEnabled, past: past);
 }
 
 /// 生成一份只含一条事件的 iCalendar 文本。
 ///
 /// 纯函数（时间由 [stamp] 注入），所以格式能被单测逐字锁住。
 /// 用的是 RFC 5545 那一套，注意换行必须是 CRLF —— 有些日历对 LF 直接不认。
-String buildIcs(Daily daily, {required DateTime stamp, bool withAlarm = true}) {
+String buildIcs(
+  Daily daily, {
+  required DateTime stamp,
+  bool withAlarm = true,
+  bool past = false,
+}) {
   final date = daily.date;
   final lines = <String>[
     'BEGIN:VCALENDAR',
@@ -61,11 +82,11 @@ String buildIcs(Daily daily, {required DateTime stamp, bool withAlarm = true}) {
     'UID:time-${daily.id}@muanyan.daily',
     'DTSTAMP:${_stamp(stamp)}',
     if (date != null) 'DTSTART;VALUE=DATE:${_date(date)}',
-    'SUMMARY:${_escape(withAlarm ? daily.title : '${daily.title}（已过去）')}',
+    'SUMMARY:${_escape(past ? '${daily.title}（已过去）' : daily.title)}',
     if (daily.headText.trim().isNotEmpty) 'DESCRIPTION:${_escape(daily.headText)}',
     // DTSTART 已经是「第一次发生的那天」了（比如 1998 年的结婚日），
     // 规则交给日历往前滚 —— 我们不排十年后的一次，日历会
-    ..._recurrence(daily.repeatRule),
+    ..._recurrence(daily.repeatRule, date),
     if (withAlarm && date != null) ..._alarm(daily),
     'END:VEVENT',
     'END:VCALENDAR',
@@ -74,11 +95,39 @@ String buildIcs(Daily daily, {required DateTime stamp, bool withAlarm = true}) {
 }
 
 /// 重复规则。不重复就一行都不写 —— 写了 `FREQ=DAILY` 那种才是灾难。
-List<String> _recurrence(RepeatRule rule) => switch (rule) {
-      RepeatRule.none => const [],
-      RepeatRule.yearly => const ['RRULE:FREQ=YEARLY'],
-      RepeatRule.monthly => const ['RRULE:FREQ=MONTHLY'],
-    };
+///
+/// 日期不存在的月份/年份，日历是**整次跳过**，而 App 里 `addMonthsClamped`
+/// 是「够不着就落到当月最后一天」。两种口径在下面这几种日期上会分叉，
+/// 而这份导出正是给「准点响」兜底的 —— 漏掉一次就白兜了，所以翻译成
+/// 同样会落到月末的写法：
+///
+///   · 每月 31 号 → 每月最后一个存在的 28~31 日（`BYSETPOS=-1` 取集合末位）
+///   · 每月 29/30 号 → 各月的那一天，再补一条 2 月的「28/29 里的最后一天」；
+///     两条 `RRULE` 按并集算（RFC 5545 允许多条），合起来才是 App 的口径
+///   · 每年 2 月 29 日 → 每年 2 月的「28/29 里的最后一天」，平年落 28 号
+///
+/// 29 号那条在闰年会和补的规则重合到同一天，并集里仍然只算一次。
+List<String> _recurrence(RepeatRule rule, DateTime? date) {
+  if (date == null) return const [];
+  switch (rule) {
+    case RepeatRule.none:
+      return const [];
+    case RepeatRule.yearly:
+      if (date.month == 2 && date.day == 29) {
+        return const ['RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1'];
+      }
+      return const ['RRULE:FREQ=YEARLY'];
+    case RepeatRule.monthly:
+      if (date.day <= 28) return const ['RRULE:FREQ=MONTHLY'];
+      if (date.day == 31) {
+        return const ['RRULE:FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1'];
+      }
+      return [
+        'RRULE:FREQ=MONTHLY;BYMONTHDAY=${date.day}',
+        'RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1',
+      ];
+  }
+}
 
 /// 提醒。全天事件的 DTSTART 是当天 00:00，用户要的是「提前 N 天的 H 点」，
 /// 换算成相对 DTSTART 的偏移就是 `H*60+M - N*1440` 分钟。

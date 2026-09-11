@@ -11,6 +11,7 @@ import 'package:daily/pages/lock.dart';
 import 'package:daily/pages/splash.dart';
 import 'package:daily/styles/colors.dart';
 import 'package:daily/utils/date_util.dart';
+import 'package:daily/utils/external_flow.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:oktoast/oktoast.dart';
@@ -128,6 +129,9 @@ class _DailyAppState extends State<DailyApp> with WidgetsBindingObserver {
     final since = _backgroundedAt;
     _backgroundedAt = null;
     if (since == null || !_lockWanted || _locked.value) return;
+    // 刚才是用户在相册/文件选择器/分享面板里挑东西，不是「手机离手」。
+    // 挑照片花三五分钟很正常，这时候上锁会把正在填的表单连同照片一起清掉
+    if (ExternalFlow.active) return;
     if (DateTime.now().difference(since) < kLockGrace) return;
     _lockNow();
   }

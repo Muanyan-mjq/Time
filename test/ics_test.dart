@@ -11,6 +11,7 @@ Daily _daily({
   String headText = '执子之手',
   String targetDay = '1998-05-08',
   RepeatRule repeatRule = RepeatRule.none,
+  bool remindEnabled = true,
   int remindDaysBefore = 0,
   int remindHour = 9,
   int remindMinute = 0,
@@ -22,11 +23,15 @@ Daily _daily({
       targetDay: targetDay,
       remark: '',
       repeatRule: repeatRule,
-      remindEnabled: true,
+      remindEnabled: remindEnabled,
       remindDaysBefore: remindDaysBefore,
       remindHour: remindHour,
       remindMinute: remindMinute,
     );
+
+/// 所有 RRULE 行的内容（不含 `RRULE:` 前缀之外的解析，逐字比较用）。
+List<String> _rules(String text) =>
+    text.split('\r\n').where((l) => l.startsWith('RRULE:')).toList();
 
 final DateTime _stamp = DateTime.utc(2026, 9, 11, 14, 30, 5);
 
@@ -66,15 +71,50 @@ void main() {
 
   group('重复规则', () {
     test('每年', () {
-      expect(_build(_daily(repeatRule: RepeatRule.yearly)).contains('RRULE:FREQ=YEARLY'), isTrue);
+      expect(_rules(_build(_daily(repeatRule: RepeatRule.yearly))), ['RRULE:FREQ=YEARLY']);
     });
 
-    test('每月', () {
-      expect(_build(_daily(repeatRule: RepeatRule.monthly)).contains('RRULE:FREQ=MONTHLY'), isTrue);
+    test('每月（1~28 号）不加多余的限定', () {
+      expect(_rules(_build(_daily(repeatRule: RepeatRule.monthly))), ['RRULE:FREQ=MONTHLY']);
     });
 
     test('不重复就一行 RRULE 都没有', () {
-      expect(_build(_daily(repeatRule: RepeatRule.none)).contains('RRULE'), isFalse);
+      expect(_rules(_build(_daily(repeatRule: RepeatRule.none))), isEmpty);
+      expect(_build(_daily()).contains('RRULE'), isFalse);
+    });
+
+    // App 的重复是 addMonthsClamped ——「够不着就落到当月最后一天」；
+    // 而日历碰上不存在的日期是**整次跳过**。下面几条把两边翻译成同一个口径，
+    // 否则 2 月 29 日的记录四年里只响一次、31 号的记录一年漏五个月。
+    test('每月 31 号 → 每月最后一个存在的 28~31 日', () {
+      final text = _build(_daily(targetDay: '2026-01-31', repeatRule: RepeatRule.monthly));
+      expect(_rules(text), ['RRULE:FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1']);
+    });
+
+    test('每月 30 号 → 各月 30 号 + 2 月那条落到 28/29', () {
+      final text = _build(_daily(targetDay: '2026-01-30', repeatRule: RepeatRule.monthly));
+      expect(_rules(text), [
+        'RRULE:FREQ=MONTHLY;BYMONTHDAY=30',
+        'RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1',
+      ]);
+    });
+
+    test('每月 29 号 → 各月 29 号 + 2 月那条落到 28/29', () {
+      final text = _build(_daily(targetDay: '2026-01-29', repeatRule: RepeatRule.monthly));
+      expect(_rules(text), [
+        'RRULE:FREQ=MONTHLY;BYMONTHDAY=29',
+        'RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1',
+      ]);
+    });
+
+    test('每年 2 月 29 日 → 平年落到 2 月 28 日，不是整年跳过', () {
+      final text = _build(_daily(targetDay: '2024-02-29', repeatRule: RepeatRule.yearly));
+      expect(_rules(text), ['RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1']);
+    });
+
+    test('每年 2 月 28 日不需要夹取，仍是最普通的 YEARLY', () {
+      final text = _build(_daily(targetDay: '2024-02-28', repeatRule: RepeatRule.yearly));
+      expect(_rules(text), ['RRULE:FREQ=YEARLY']);
     });
   });
 
@@ -109,10 +149,50 @@ void main() {
       expect(text.contains('TRIGGER:PT45M'), isTrue);
     });
 
-    test('withAlarm=false 时没有 VALARM，标题上标注已过去', () {
-      final text = buildIcs(_daily(title: '考试倒计时'), stamp: _stamp, withAlarm: false);
+    test('withAlarm=false 时没有 VALARM', () {
+      final text = buildIcs(_daily(), stamp: _stamp, withAlarm: false);
       expect(text.contains('BEGIN:VALARM'), isFalse);
+    });
+
+    test('past=true 时才在标题上标注已过去，标注不影响标题本身', () {
+      final text =
+          buildIcs(_daily(title: '考试倒计时'), stamp: _stamp, withAlarm: false, past: true);
       expect(text.contains('SUMMARY:考试倒计时（已过去）'), isTrue);
+      expect(text.contains('SUMMARY:考试倒计时\r\n'), isFalse);
+    });
+  });
+
+  group('导出决策', () {
+    final today = DateTime(2026, 9, 11);
+
+    test('提醒开着、日期还没到 → 带闹钟', () {
+      expect(calendarPlan(_daily(targetDay: '2026-12-01'), today),
+          (withAlarm: true, past: false));
+    });
+
+    test('提醒关着 → 不带闹钟，但也不算「已过去」', () {
+      expect(calendarPlan(_daily(targetDay: '2026-12-01', remindEnabled: false), today),
+          (withAlarm: false, past: false));
+    });
+
+    test('一次性记录已经过去 → 不带闹钟并标「已过去」', () {
+      expect(calendarPlan(_daily(targetDay: '2026-09-10'), today),
+          (withAlarm: false, past: true));
+    });
+
+    test('当天不算过去', () {
+      expect(calendarPlan(_daily(targetDay: '2026-09-11'), today),
+          (withAlarm: true, past: false));
+    });
+
+    test('重复记录起日再早也不算「已过去」—— 日历会往前滚', () {
+      expect(
+          calendarPlan(_daily(targetDay: '1998-05-08', repeatRule: RepeatRule.yearly), today),
+          (withAlarm: true, past: false));
+    });
+
+    test('日期解析不了 → 什么闹钟都不带', () {
+      expect(calendarPlan(_daily(targetDay: '待补充'), today), (withAlarm: false, past: false));
     });
   });
 

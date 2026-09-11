@@ -331,6 +331,9 @@ class _TimelinePageState extends State<TimelinePage> with SingleTickerProviderSt
   }
 
   Widget _buildDot(BuildContext context, Cover cover, double size) {
+    // 圆点只有 15dp 上下，按它真正占的物理像素解码，别为这点大的圆圈
+    // 把整张照片（最长边 1600）读进内存
+    final decodeWidth = (size * MediaQuery.devicePixelRatioOf(context)).round();
     return Container(
       width: size,
       height: size,
@@ -339,7 +342,7 @@ class _TimelinePageState extends State<TimelinePage> with SingleTickerProviderSt
         // 和底色同色的一圈，圆点压在轴线上时把那截线断开，像打了个孔
         border: Border.all(color: AppColors.of(context).background, width: 2),
       ),
-      child: ClipOval(child: CoverView(cover: cover)),
+      child: ClipOval(child: CoverView(cover: cover, decodeWidth: decodeWidth)),
     );
   }
 

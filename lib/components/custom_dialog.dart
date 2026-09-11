@@ -18,6 +18,10 @@ Future<bool> _confirm(
   required IconData icon,
   required String confirmContent,
 }) async {
+  // 确认框经常是 await 完外部界面（选择器、分享面板）之后才弹的，
+  // 这中间发起它的页面可能已经被换掉（比如隐私锁）—— 那时 showDialog
+  // 会直接抛，恢复流程断在半路。当作「用户取消」处理，让它干净收场
+  if (!context.mounted) return false;
   final result = await showDialog<int>(
     context: context,
     barrierDismissible: false,

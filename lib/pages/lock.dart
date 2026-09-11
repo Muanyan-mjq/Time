@@ -182,7 +182,9 @@ class _LockPageState extends State<LockPage> {
                   },
                   child: Text(
                     '先跳过',
-                    style: styles.appTip.copyWith(color: colors.onBackgroundFaint),
+                    // 用 muted 而不是 faint：这是验证失败时唯一的退路，
+                    // faint 在浅底上只有 1.8:1 的对比度，读不出来就成了事故
+                    style: styles.appTip.copyWith(color: colors.onBackgroundMuted),
                   ),
                 ),
             ],

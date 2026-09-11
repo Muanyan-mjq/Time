@@ -30,13 +30,7 @@
 ## 截图
 
 > [!NOTE]
-> 下面这组截图拍摄于 **2020 年的原始版本**。1.1.0 在保留原设计骨架（弧线、字体、配色）的前提下重做了交互与层级，实际界面与截图已有出入 —— 但为了留下「它从哪儿来」的记录，这里没有换掉。
-
-<img src="./screenshot/daily.gif" width="340px" />
-
-| ![](./screenshot/Screenshot_1.png) | ![](./screenshot/Screenshot_2.png) | ![](./screenshot/Screenshot_3.png) |
-| :--------------------------------: | :--------------------------------: | :--------------------------------: |
-| ![](./screenshot/Screenshot_4.png) | ![](./screenshot/Screenshot_5.png) | ![](./screenshot/Screenshot_6.png) |
+> 2020 年原版的截图在 1.1.0 的仓库清理里删掉了：那些界面和现在差了整整一轮重做，留着只会误导。想回看它从哪儿来，`git log` 里翻 `screenshot/` 那几次提交。
 
 ---
 
@@ -149,16 +143,16 @@ const String kPosterShareUrl = kRepoUrl;
 ```bash
 flutter pub get
 flutter analyze
-flutter test        # 日期算法 / 重复规则 / 分组排序 / 封面解析 / 时光轴刻度 / 海报 / 日历导出 / 数据库迁移，135 个用例
+flutter test        # 日期算法 / 重复规则 / 提醒排期 / 分组排序 / 封面解析与存储 / 备份 / 时光轴刻度 / 日历导出 / 数据库迁移 / 主题 / 矮屏布局，162 个用例
 flutter build apk --release
 ```
 
 产物：`build/app/outputs/flutter-apk/app-release.apk`
 
-想要更小的包（通用包 61 MB，三个 ABI 打在一起）：
+想要更小的包（通用包 65.7 MB，三个 ABI 打在一起）：
 
 ```bash
-flutter build apk --release --split-per-abi   # arm64-v8a 大约 22 MB
+flutter build apk --release --split-per-abi   # arm64-v8a 约 31 MB、armeabi-v7a 约 29 MB
 ```
 
 ## 技术栈
