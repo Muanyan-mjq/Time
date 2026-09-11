@@ -39,6 +39,10 @@ class NotificationService {
 
   bool _ready = false;
 
+  /// 上一次真正排下去的记录 id。用来在记录被删掉之后，把**已经弹出来**的
+  /// 那条也从通知栏撤掉 —— `pendingNotificationRequests` 只看得到还没响的。
+  final Set<int> _scheduledIds = <int>{};
+
   /// 通知被点开时要跳到哪条记录。null 表示没有待处理的目标。
   ///
   /// 用 notifier 而不是直接 push 路由：点通知可能发生在 App 还没起来的时候，
@@ -131,11 +135,21 @@ class NotificationService {
       for (final p in await _plugin.pendingNotificationRequests()) {
         if (p.id != kOngoingId) await _plugin.cancel(id: p.id);
       }
+    } catch (e, st) {
+      // 取消失败不该带走下面的排班：宁可重复响一次，也别一条都不响
+      _report('取消旧提醒', e, st);
+    }
 
-      final now = DateTime.now();
-      for (final daily in DailyRepository.instance.items.value) {
-        final at = remindMoment(daily, now);
-        if (at == null) continue;
+    final now = DateTime.now();
+    final live = <int>{};
+    for (final daily in DailyRepository.instance.items.value) {
+      final at = remindMoment(daily, now);
+      if (at == null) continue;
+      live.add(daily.id);
+      // 每条单独兜异常：排一条失败（权限被临时收回、时间点被判在过去）
+      // 不能让后面所有条一起消失 —— 取消那一步已经跑完了，整批抛出
+      // 的结果是「全部取消、一条没排」，用户一条提醒都收不到
+      try {
         await _plugin.zonedSchedule(
           id: _dailyIdBase + daily.id,
           scheduledDate: _instant(at),
@@ -146,20 +160,38 @@ class NotificationService {
               ? AndroidScheduleMode.inexactAllowWhileIdle
               : AndroidScheduleMode.exactAllowWhileIdle,
           title: daily.headText.isEmpty ? daily.title : daily.headText,
-          body: _body(daily, now),
+          body: _fireBody(daily),
           payload: '${daily.id}',
         );
+      } catch (e, st) {
+        _report('排期提醒「${daily.title}」', e, st);
       }
-
-      await syncOngoing();
-    } catch (e, st) {
-      FlutterError.reportError(FlutterErrorDetails(
-        exception: e,
-        stack: st,
-        library: 'daily',
-        context: ErrorDescription('重排纪念日提醒'),
-      ));
     }
+
+    // 记录被删掉、或者提醒被关掉之后，已经弹出来的那条还挂在通知栏里，
+    // 点它又跳不到任何地方（pendingNotificationRequests 只看得到没响的，
+    // 所以上面那圈取消扫不到它）。这里把「上次排过、这次不在名单里」的撤掉
+    for (final gone in _scheduledIds.difference(live)) {
+      try {
+        await _plugin.cancel(id: _dailyIdBase + gone);
+      } catch (e, st) {
+        _report('撤下已删除记录的提醒', e, st);
+      }
+    }
+    _scheduledIds
+      ..clear()
+      ..addAll(live);
+
+    await syncOngoing();
+  }
+
+  void _report(String what, Object e, StackTrace st) {
+    FlutterError.reportError(FlutterErrorDetails(
+      exception: e,
+      stack: st,
+      library: 'daily',
+      context: ErrorDescription(what),
+    ));
   }
 
   /// 把设备本地时刻交给插件。
@@ -175,8 +207,18 @@ class NotificationService {
   /// 回到 App 就会重排，这个代价落不到实处。
   tz.TZDateTime _instant(DateTime local) => tz.TZDateTime.from(local, tz.UTC);
 
-  /// 这条记录下次该在什么时候响。判断在 `remind_plan.dart`，那边可以单测。
-  String _body(Daily daily, DateTime now) {
+  /// 定时提醒的正文。
+  ///
+  /// 必须由**响的那一刻**得出，不能拿排班时刻的 now 去算：每年重复的记录
+  /// 可能提前一年就排下去了，用 now 算出来的「还有 239 天」会被原样冻进
+  /// 通知里，到点弹出来就是这么一句 —— 用户看到的是三百多天前的旧账。
+  /// 而响的那天离纪念日恒等于「提前 N 天」，所以直接拿它当数，
+  /// 排班时算和响铃时算是同一个值。
+  String _fireBody(Daily daily) =>
+      '${countdownLabel(daily.remindDaysBefore)} · ${daily.title}';
+
+  /// 常驻倒计时的正文。它是当场显示出来的，所以就该用当下这一刻算。
+  String _liveBody(Daily daily, DateTime now) {
     final next = daily.nextDateFrom(now);
     if (next == null) return daily.remark;
     return '${countdownLabel(signedDaysFromToday(next, now: now))} · ${daily.title}';
@@ -211,7 +253,7 @@ class NotificationService {
 
       await _plugin.show(
         id: kOngoingId,
-        title: _body(nearest.daily, now),
+        title: _liveBody(nearest.daily, now),
         body: '打开 $kAppName 看全部',
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(

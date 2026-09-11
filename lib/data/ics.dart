@@ -80,14 +80,41 @@ List<String> _recurrence(RepeatRule rule) => switch (rule) {
       RepeatRule.monthly => const ['RRULE:FREQ=MONTHLY'],
     };
 
-/// 提醒。全天事件的 DTSTART 是当天 00:00，所以「提前 N 天的 9 点」
-/// 就是 `-(P{N}DT9H)` —— 时长写成一段，别拆成两条 TRIGGER。
+/// 提醒。全天事件的 DTSTART 是当天 00:00，用户要的是「提前 N 天的 H 点」，
+/// 换算成相对 DTSTART 的偏移就是 `H*60+M - N*1440` 分钟。
+///
+/// 不能写成 `-P{N}DT{H}H`：RFC 5545 里时长的负号作用于**整段**，
+/// `-P3DT9H` 是「提前 3 天零 9 小时」，不是「提前 3 天的 9 点」。
+/// 按那样写，默认的「当天 9:00」会变成前一天的 15:00 —— 恒定早 2×hour 小时，
+/// 而这份导出正是给「国产 ROM 杀后台导致提醒不准」兜底用的，
+/// 早一天弹出来等于没兜住。
+///
+/// 偏移为正表示落在 DTSTART 之后（当天 9 点就是这种），这时不能带负号。
 List<String> _alarm(Daily daily) {
-  final days = daily.remindDaysBefore;
-  final duration = days > 0 ? 'P${days}DT${daily.remindHour}H' : 'PT${daily.remindHour}H';
+  final total =
+      daily.remindHour * 60 + daily.remindMinute - daily.remindDaysBefore * 1440;
+  final sign = total < 0 ? '-' : '';
+  final abs = total.abs();
+  final days = abs ~/ 1440;
+  final hours = (abs % 1440) ~/ 60;
+  final mins = abs % 60;
+
+  final spec = StringBuffer(sign)..write('P');
+  if (days > 0) spec.write('${days}D');
+  final hasTime = hours > 0 || mins > 0;
+  if (hasTime) {
+    spec.write('T');
+    if (hours > 0) spec.write('${hours}H');
+    // 有小时就不必再写 0M；没有小时时必须写，否则「T」后面是空的
+    if (mins > 0 || hours == 0) spec.write('${mins}M');
+  } else if (days == 0) {
+    // 偏移恰好是 0（提前 0 天的 0 点整）：PARAM 值不能是裸的 P
+    spec.write('T0M');
+  }
+
   return [
     'BEGIN:VALARM',
-    'TRIGGER:-$duration',
+    'TRIGGER:$spec',
     'ACTION:DISPLAY',
     'DESCRIPTION:${_escape(daily.title)}',
     'END:VALARM',

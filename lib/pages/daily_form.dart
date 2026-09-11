@@ -9,6 +9,7 @@ import 'package:daily/data/covers.dart';
 import 'package:daily/data/daily_repository.dart';
 import 'package:daily/data/form_templates.dart';
 import 'package:daily/data/notifications.dart';
+import 'package:daily/data/remind_plan.dart';
 import 'package:daily/model/cover.dart';
 import 'package:daily/model/daily.dart';
 import 'package:daily/model/repeat_rule.dart';
@@ -272,10 +273,13 @@ class _DailyFormPageState extends State<DailyFormPage> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             GestureDetector(
-              behavior: HitTestBehavior.translucent,
+              behavior: HitTestBehavior.opaque,
               onTap: onTap,
               child: SizedBox(
                 width: MediaQuery.sizeOf(context).width - 60,
+                // 撑满整行 60px：不写的话只有文字那一条约 20px 高的区域能点，
+                // 手指落在行里的空白上毫无反应，用起来像控件坏了
+                height: double.infinity,
                 child: Row(
                   children: [
                     Text(label, style: styles.inputLabelStyle),
@@ -361,12 +365,27 @@ class _DailyFormPageState extends State<DailyFormPage> {
     );
   }
 
-  /// 提醒排下去的那一刻会不会真的响。和 `NotificationService._remindAt` 同一个
-  /// 判断口径：非重复记录的日期一旦过去，排班时会跳过它。
+  /// 提醒排下去的那一刻会不会真的响。
+  ///
+  /// 判据只能有一个：直接问 `remindMoment`（真正排班时走的就是它）。
+  /// 自己拿 `_targetDay` 减提前天数再比 now 会算错重复记录 —— 起始日早就
+  /// 过去了，可下一个重复日还在未来，于是表单对着一条好端端的「每年」提醒
+  /// 说「不会响」，用户信了就去乱改规则。
   bool get _remindWillFire {
-    final at = DateTime(_targetDay.year, _targetDay.month, _targetDay.day, _remindHour, _remindMinute)
-        .subtract(Duration(days: _remindDaysBefore));
-    return at.isAfter(DateTime.now());
+    final probe = Daily(
+      id: widget.daily?.id ?? 0,
+      title: _titleController.text,
+      headText: '',
+      targetDay: fmtStorage(_targetDay),
+      remark: '',
+      repeatRule: _repeatRule,
+      // 只看时刻，开关本身的状态由外面的 UI 决定
+      remindEnabled: true,
+      remindDaysBefore: _remindDaysBefore,
+      remindHour: _remindHour,
+      remindMinute: _remindMinute,
+    );
+    return remindMoment(probe, DateTime.now()) != null;
   }
 
   Widget _buildSwitchItem({
@@ -382,12 +401,18 @@ class _DailyFormPageState extends State<DailyFormPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             GestureDetector(
-              behavior: HitTestBehavior.translucent,
+              behavior: HitTestBehavior.opaque,
               // 整行可点，不然只有那个小滑块可点，很容易按空
               onTap: () => onChanged(!value),
               child: SizedBox(
                 width: MediaQuery.sizeOf(context).width - 100,
-                child: Text(label, style: AppTextStyles.of(context).inputLabelStyle),
+                // 同 `_buildSelectItem`：把热区撑到整行高度。
+                // 必须套 Align —— 高度变紧之后 Text 会贴到顶部，标签就歪了
+                height: double.infinity,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(label, style: AppTextStyles.of(context).inputLabelStyle),
+                ),
               ),
             ),
             Switch(value: value, onChanged: onChanged),
@@ -583,7 +608,10 @@ class _DailyFormPageState extends State<DailyFormPage> {
   }
 
   Future<void> _save() async {
-    if (_titleController.text.isEmpty) {
+    // trim 之后再判：中文输入法很容易带出全角空格，只判 isEmpty 会存下一条
+    // 标题看着是空白的记录，在列表里既找不到也没法解释
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
       showToast('标题名是必须填写的哦～');
       return;
     }
@@ -593,7 +621,7 @@ class _DailyFormPageState extends State<DailyFormPage> {
 
     var daily = Daily(
       id: widget.daily?.id ?? 0,
-      title: _titleController.text,
+      title: title,
       headText: _headTextController.text.isEmpty ? kDefaultHeadText : _headTextController.text,
       targetDay: fmtStorage(_targetDay),
       remark: _contentController.text.isEmpty ? kDefaultRemark : _contentController.text,
@@ -605,21 +633,47 @@ class _DailyFormPageState extends State<DailyFormPage> {
       remindMinute: _remindMinute,
     );
 
+    // 写库这一段必须包起来：一旦抛异常（库锁、磁盘满、库损坏），
+    // _saving 会永远停在 true，之后每次点保存都被上面的 `if (_saving) return`
+    // 静默吃掉 —— 按钮彻底假死，用户只能退出去把输入丢掉
     final repo = DailyRepository.instance;
-    if (widget.isEdit) {
-      final ok = await repo.update(daily);
-      if (!ok) {
-        if (mounted) setState(() => _saving = false);
-        showToast('修改失败，请重试');
-        return;
+    try {
+      if (widget.isEdit) {
+        final ok = await repo.update(daily);
+        if (!ok) {
+          if (mounted) setState(() => _saving = false);
+          showToast('修改失败，请重试');
+          return;
+        }
+      } else {
+        daily = daily.copyWith(id: await repo.insert(daily));
       }
-    } else {
-      daily = daily.copyWith(id: await repo.insert(daily));
+    } catch (e, st) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'daily',
+        context: ErrorDescription('保存纪念日'),
+      ));
+      if (mounted) setState(() => _saving = false);
+      showToast('保存失败，请重试');
+      return;
     }
 
-    // 数据库写成功之后才动文件：先删文件再写库，写库失败就没图了
-    await _cover.commit();
-    _committed = true;
+    // 数据库写成功之后才动文件：先删文件再写库，写库失败就没图了。
+    // 这一步单独兜是因为记录已经进库了 —— 封面落回渐变总比让用户
+    // 以为没保存、再点一次存出两条要好
+    try {
+      await _cover.commit();
+      _committed = true;
+    } catch (e, st) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'daily',
+        context: ErrorDescription('提交封面照片'),
+      ));
+    }
 
     unawaited(successFeedback());
     showToast(widget.isEdit ? '修改成功' : '添加成功');
@@ -636,7 +690,12 @@ class _DailyFormPageState extends State<DailyFormPage> {
   Future<void> _delete() async {
     unawaited(warningFeedback());
     final old = widget.daily!.coverKey;
-    await DailyRepository.instance.delete(widget.daily!.id);
+    // 必须看返回值：删失败（行已经被别处删掉、库出问题）时如果照样删照片
+    // 并报「删除成功」，用户看到的是记录还在、图没了
+    if (!await DailyRepository.instance.delete(widget.daily!.id)) {
+      showToast('删除失败，请重试');
+      return;
+    }
     // 数据库删成功之后再删文件
     _cover.rollback();
     if (old != null && old.startsWith(kPhotoPrefix)) {

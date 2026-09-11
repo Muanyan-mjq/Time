@@ -69,15 +69,31 @@ class Settings {
 
   /// 每次都整份重写。键少，合并的成本比「记得改 load 和 save 两处」低。
   Future<void> _write() async {
-    final file = _file;
-    if (file == null) return;
-    await file.writeAsString(
-      jsonEncode({
-        'darkMode': darkMode.value,
-        'ongoingNotification': ongoingNotification.value,
-        'lockEnabled': lockEnabled.value,
-      }),
-      flush: true,
-    );
+    try {
+      var file = _file;
+      if (file == null) {
+        // load() 那次读目录就抛了。这时不能直接放弃：界面上的开关已经翻过去了，
+        // 写不下去的话用户下次冷启动会发现它自己弹回来，还以为开关坏了
+        final root = await getApplicationDocumentsDirectory();
+        file = _file = File(p.join(root.path, kSettingsFileName));
+      }
+      await file.writeAsString(
+        jsonEncode({
+          'darkMode': darkMode.value,
+          'ongoingNotification': ongoingNotification.value,
+          'lockEnabled': lockEnabled.value,
+        }),
+        flush: true,
+      );
+    } catch (e, st) {
+      // 调用方都是 unawaited(...)，异常逃出去只会变成一条没人管的后台报错。
+      // 在这里收住并上报，至少能在 logcat 里看到真正的原因
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'daily',
+        context: ErrorDescription('保存设置'),
+      ));
+    }
   }
 }

@@ -57,6 +57,15 @@ const double kAboutSettingsLeft = 50;
 const double kAboutSettingsBottom = 200;
 const double kAboutSettingsWidth = 240;
 
+/// 设置栏的上边界，不能高过上面那两行版本号。
+///
+/// 版本号从 [kAboutVersionTop] 起，14 号字两行加中间那点间距大约到 207，
+/// 这里再让开 13。屏幕够高时它离设置栏老远、轮不到它说话，位置仍由底边
+/// 那个 200 决定；只有矮屏（比如 1080×1920 按 3 倍像素比算下来只有 640
+/// 逻辑高，再减掉三键导航的 48）才会顶到这条线 —— 那一栏自己变成可滚动的，
+/// 总比「功能介绍」盖在版本号上强。
+const double kAboutSettingsTop = 220;
+
 /// 开关那几行的行内图标大小与图文间距。
 ///
 /// 上面三个图片项的尺寸不在这里 —— 那几张 png 自带的留白各不相同，

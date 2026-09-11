@@ -79,14 +79,34 @@ void main() {
   });
 
   group('提醒', () {
-    test('提前 3 天的 9 点 = -P3DT9H', () {
-      expect(_build(_daily(remindDaysBefore: 3)).contains('TRIGGER:-P3DT9H'), isTrue);
+    // 全天事件的 DTSTART 是当天 00:00，所以「提前 N 天的 H 点」得换算成
+    // 相对 DTSTART 的偏移。RFC 5545 里时长的负号作用于**整段** ——
+    // `-P3DT9H` 是「提前 3 天零 9 小时」，不是「提前 3 天的 9 点」。
+    test('当天 9 点 ＝ DTSTART 之后 9 小时，不该带负号', () {
+      final text = _build(_daily(remindDaysBefore: 0, remindHour: 9));
+      expect(text.contains('TRIGGER:PT9H'), isTrue);
+      expect(text.contains('TRIGGER:-'), isFalse);
     });
 
-    test('当天提醒不再写 P0D，直接用 -PT9H', () {
-      final text = _build(_daily(remindDaysBefore: 0));
-      expect(text.contains('TRIGGER:-PT9H'), isTrue);
-      expect(text.contains('P0D'), isFalse);
+    test('提前 3 天的 9 点 ＝ 2 天 15 小时之前', () {
+      final text = _build(_daily(remindDaysBefore: 3, remindHour: 9));
+      expect(text.contains('TRIGGER:-P2DT15H'), isTrue);
+    });
+
+    test('提前 1 天的 0 点 ＝ 整整 1 天之前，不写多余的时间段', () {
+      final text = _build(_daily(remindDaysBefore: 1, remindHour: 0));
+      expect(text.contains('TRIGGER:-P1D'), isTrue);
+      expect(text.contains('0M'), isFalse);
+    });
+
+    test('分钟不会被丢掉', () {
+      final text = _build(_daily(remindDaysBefore: 1, remindHour: 8, remindMinute: 30));
+      expect(text.contains('TRIGGER:-PT15H30M'), isTrue);
+    });
+
+    test('只有分钟时也拼得出来', () {
+      final text = _build(_daily(remindDaysBefore: 0, remindHour: 0, remindMinute: 45));
+      expect(text.contains('TRIGGER:PT45M'), isTrue);
     });
 
     test('withAlarm=false 时没有 VALARM，标题上标注已过去', () {

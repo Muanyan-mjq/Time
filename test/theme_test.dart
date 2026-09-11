@@ -117,4 +117,57 @@ void main() {
     expect(styles[Brightness.light]?.appTitle.color, Colors.black87);
     expect(styles[Brightness.dark]?.appTitle.color, const Color(0xFFEDEDED));
   });
+
+  testWidgets('底部弹层读到的 Theme 是实时的 —— 翻主题时它跟着重画', (tester) async {
+    // 这条钉的是 FAB 菜单那个弹层：深色模式的开关就摆在弹层里，开关一拨
+    // 弹层必须立刻换成暗色，否则用户眼前是一个亮色弹层配一个暗色首页。
+    //
+    // 结论来自 Flutter 的实现：`showModalBottomSheet` 传的 `to` 是
+    // **Navigator 的 context**，而 MaterialApp 的 `AnimatedTheme` 在
+    // Navigator 之上，所以一个主题都没捕获到（`_themes` 为空），弹层里的
+    // `Theme.of` 于是直通上面那个活的 Theme。哪天 Flutter 改成连
+    // MaterialApp 的 Theme 一起捕获，这条会红 —— 那时就得在弹层内部
+    // 自己拿 `Settings.darkMode` 重新盖一层 Theme。
+    final mode = ValueNotifier<ThemeMode>(ThemeMode.light);
+    final seen = <Brightness>[];
+
+    await tester.pumpWidget(
+      ValueListenableBuilder<ThemeMode>(
+        valueListenable: mode,
+        builder: (context, m, _) => MaterialApp(
+          themeMode: m,
+          theme: ThemeData(brightness: Brightness.light),
+          darkTheme: ThemeData(brightness: Brightness.dark),
+          home: Builder(
+            builder: (page) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: page,
+                    builder: (sheetContext) => Builder(
+                      builder: (inner) {
+                        seen.add(AppColors.of(inner) == AppColors.dark
+                            ? Brightness.dark
+                            : Brightness.light);
+                        return const SizedBox(width: 40, height: 40);
+                      },
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(seen.last, Brightness.light);
+
+    mode.value = ThemeMode.dark;
+    await tester.pumpAndSettle();
+    expect(seen.last, Brightness.dark, reason: '弹层没跟着主题重画，会停在旧配色上');
+  });
 }

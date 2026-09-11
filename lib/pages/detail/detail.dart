@@ -48,11 +48,18 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
 
   late ({int years, int months, int days}) _ymd;
 
+  /// 日期解析不了时为 false（老库里的记录、或从别处导进来的）。
+  ///
+  /// 必须有这个标志：那种记录下面几个数全是 0，直接判 `_signedDays == 0`
+  /// 会把它当成「就是今天」，于是放彩纸、亮徽章、写「就是今天」，
+  /// 而卡片上明明白白写着「日期待补充」—— 自相矛盾。
+  late bool _hasDate;
+
   /// 倒计时指向过去 → true。等价于老代码的 `todayIsLateTarget`。
   bool get _isPast => _signedDays < 0;
 
   /// 就是今天。彩纸和呼吸光只在这种情况下出现。
-  bool get _isToday => _signedDays == 0;
+  bool get _isToday => _hasDate && _signedDays == 0;
 
   @override
   void initState() {
@@ -75,11 +82,13 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
     final date = _daily.date;
     final next = _daily.nextDate;
     if (date == null || next == null) {
+      _hasDate = false;
       _signedDays = 0;
       _ageDays = 0;
       _ymd = (years: 0, months: 0, days: 0);
       return;
     }
+    _hasDate = true;
     final now = DateTime.now();
     _signedDays = signedDaysFromToday(next, now: now);
     _ageDays = signedDaysFromToday(date, now: now);
@@ -97,6 +106,11 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
         body: Stack(
           children: [
             SingleChildScrollView(
+              // 详情页没有底部栏，备注一长最后一行就压在手势条底下 ——
+              // 自己让开底部安全区
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 10,
+              ),
               child: Column(
                 children: [
                   GestureDetector(
@@ -198,6 +212,7 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
   /// 年月日：从起始日算起的年龄。重复记录看的是「多久了」，
   /// 倒计时看的是「还有多久」，两边由不同的数得出。
   Widget _buildYmd(double sceneWidth) {
+    if (!_hasDate) return _buildMissingDate(sceneWidth);
     // 满 0 天时不显示 00年00月00日。这里用年龄天数而不是倒计时天数：
     // 一条 1998 年起每年重复的记录，在周年日当天倒计时是 0，年龄是 28 年。
     if (_ageDays == 0) {
@@ -238,6 +253,7 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
 
   /// 距离目标日的总天数
   Widget _buildTotalDays(double sceneWidth) {
+    if (!_hasDate) return _buildMissingDate(sceneWidth);
     return SizedBox(
       width: (sceneWidth - 36) * 0.6,
       height: 80,
@@ -249,6 +265,17 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
           const Text('天', style: AppTextStyles.countBottomTipStyle),
           Icon(_isPast ? Iconfont.up2 : Iconfont.down1, color: Colors.white, size: 14),
         ],
+      ),
+    );
+  }
+
+  /// 没有可用日期时，两个视图都落到这里，说法和首页卡片保持一致。
+  Widget _buildMissingDate(double sceneWidth) {
+    return SizedBox(
+      width: (sceneWidth - 36) * 0.6,
+      height: 80,
+      child: const Center(
+        child: Text('日期待补充', style: AppTextStyles.countTitleStyle),
       ),
     );
   }

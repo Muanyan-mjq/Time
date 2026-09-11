@@ -239,9 +239,11 @@ class _HomeState extends State<Home> {
       context: context,
       elevation: 10,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      // 弹层是独立路由，不跟着 `MaterialApp` 重建，所以主题一翻要自己重画一遍 ——
-      // 否则开关动了、弹层还停在旧配色上。底色同理，交给 bottomSheetTheme 给，
-      // 不在这里捕获一个瞬间值。
+      // 弹层是独立路由，但配色不用在这儿操心：`showModalBottomSheet` 传的
+      // `to` 是 Navigator 的 context，而 MaterialApp 的 Theme 在 Navigator
+      // 之上，所以一个主题都没被捕获，弹层里的 `Theme.of` 是**活的**
+      // （test/theme_test.dart 里钉着这条）。这里的 ValueListenableBuilder
+      // 管的是 Switch 的 value —— 开关拨动后这一层得自己重画一次。
       builder: (sheetContext) => ValueListenableBuilder<bool>(
         valueListenable: Settings.instance.darkMode,
         builder: (sheetContext, dark, _) {

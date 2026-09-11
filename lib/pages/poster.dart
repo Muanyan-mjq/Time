@@ -254,7 +254,10 @@ class _PosterPageState extends State<PosterPage> {
 
   Widget _buildDailyContent() {
     final d = widget.daily!;
-    final days = _signedDays!;
+    // 不能写成 _signedDays!：老库里的记录、或者从别处导进来的记录，
+    // targetDay 可能是空串或写坏的值。首页卡片对这种情况显示「日期待补充」，
+    // 海报必须同样兜住 —— 这里抛异常会让整页变成报错屏，连返回按钮都没有
+    final days = _signedDays;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -293,10 +296,23 @@ class _PosterPageState extends State<PosterPage> {
           ),
         ),
         const SizedBox(height: 16),
-        _buildCountRow(days),
-        if (days != 0) ...[
-          const SizedBox(height: 6),
-          _buildYmd(),
+        if (days == null)
+          Text(
+            '日期待补充',
+            style: TextStyle(
+              fontSize: 26,
+              height: 1.0,
+              color: Colors.white.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Dongqing',
+            ),
+          )
+        else ...[
+          _buildCountRow(days),
+          if (days != 0 && _ymd != null) ...[
+            const SizedBox(height: 6),
+            _buildYmd(_ymd!),
+          ],
         ],
         const Spacer(),
         _buildFooter(),
@@ -344,8 +360,7 @@ class _PosterPageState extends State<PosterPage> {
     );
   }
 
-  Widget _buildYmd() {
-    final ymd = _ymd!;
+  Widget _buildYmd(({int years, int months, int days}) ymd) {
     return Text(
       '${ymd.years}年${ymd.months}个月${ymd.days}天',
       style: TextStyle(

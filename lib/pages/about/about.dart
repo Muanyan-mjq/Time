@@ -90,41 +90,48 @@ class About extends StatelessWidget {
             ),
             Positioned(
               left: kAboutSettingsLeft,
+              // 上下都钉。屏幕够高时是下边那条线说了算，位置和原来一样；
+              // 矮屏上顶边会把这一栏拦住，让它自己滚。只钉底边的话，
+              // 这一栏是后画的，会正好盖住上面那两行版本号。
+              top: kAboutSettingsTop,
               bottom: MediaQuery.paddingOf(context).bottom + kAboutSettingsBottom,
-              // 高度交给内容自己（原来写死 190 是量着 5 行给的），
-              // 再加一行设置就会顶出黄黑条 —— 这一栏只会越加越长
               child: SizedBox(
                 width: kAboutSettingsWidth,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildMiddleItem(
-                      context: context,
-                      title: '功能介绍',
-                      asset: 'assets/images/list.png',
-                      size: 36,
-                      action: () => _openUrl(context, _urlFeatures),
-                    ),
-                    _buildMiddleItem(
-                      context: context,
-                      title: '与作者联系',
-                      asset: 'assets/images/email.png',
-                      size: 30,
-                      action: () => _openUrl(context, _urlIssues),
-                    ),
-                    _buildMiddleItem(
-                      context: context,
-                      title: '分享给好友',
-                      asset: 'assets/images/air.png',
-                      size: 30,
-                      action: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const PosterPage(),
-                      )),
-                    ),
-                    _buildThemeItem(),
-                    _buildOngoingItem(),
-                    _buildLockItem(),
-                  ],
+                child: SingleChildScrollView(
+                  // reverse 让它永远贴着底边：内容比视口矮时，不 reverse 会
+                  // 贴着顶边摆，那一栏就浮到屏幕中间去了
+                  reverse: true,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMiddleItem(
+                        context: context,
+                        title: '功能介绍',
+                        asset: 'assets/images/list.png',
+                        size: 36,
+                        action: () => _openUrl(context, _urlFeatures),
+                      ),
+                      _buildMiddleItem(
+                        context: context,
+                        title: '与作者联系',
+                        asset: 'assets/images/email.png',
+                        size: 30,
+                        action: () => _openUrl(context, _urlIssues),
+                      ),
+                      _buildMiddleItem(
+                        context: context,
+                        title: '分享给好友',
+                        asset: 'assets/images/air.png',
+                        size: 30,
+                        action: () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const PosterPage(),
+                        )),
+                      ),
+                      _buildThemeItem(),
+                      _buildOngoingItem(),
+                      _buildLockItem(),
+                    ],
+                  ),
                 ),
               ),
             ),

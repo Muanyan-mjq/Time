@@ -48,4 +48,5 @@ app.*.map.json
 # 与本 App 无关的旁支目录，不进这个仓库
 /coloros-card/
 /yapi/
+/screenshot/
 
