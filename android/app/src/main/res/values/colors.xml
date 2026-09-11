@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 桌面图标底色。前景图中央是一块不透明 #FEFEFE 圆角板，深色底让「时光」二字读得出来 -->
+    <color name="ic_launcher_background">#111111</color>
+    <!-- 必须与 Dart 侧 AppColors.pageBackground 叠在白底上的合成结果一致：
+         Color.fromRGBO(189,195,199,0.06) over white = #FBFBFC -->
+    <color name="app_background">#FBFBFC</color>
+</resources>

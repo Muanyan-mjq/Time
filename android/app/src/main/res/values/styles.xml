@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动主题：窗口背景必须是浅色，否则会先白闪一下再进这个纯浅色的 App。
+         继承 AppCompat 是隐私锁的连带要求：MainActivity 得是 FlutterFragmentActivity
+         （local_auth 的硬要求），而 FragmentActivity 在 Android 8 及以下会用主题里
+         的 AppCompat 属性，用原生 Theme.Light 会直接崩。 -->
+    <style name="LaunchTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <!-- Flutter UI 初始化后接管，保持同一个背景色 -->
+    <style name="NormalTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+    </style>
+</resources>

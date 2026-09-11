@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ 的 SplashScreen API。
+         故意不设 windowSplashScreenAnimatedIcon：系统会回落到 App 自己的自适应图标，
+         这样启动图与桌面图标永远不会各画各的。
+
+         也故意不跟着 values/styles.xml 换成 AppCompat 主题：那边换是为了
+         FragmentActivity 在 Android 8 及以下读 AppCompat 属性，而 31+ 碰不到那段
+         老代码。这里留着平台主题，窗口背景仍是浅色，两条路线的观感一致。
+         NormalTheme 不在这儿重写，按限定符回落到 values/ 的那份。 -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/app_background</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+</resources>

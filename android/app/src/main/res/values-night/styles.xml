@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dart 侧从 1.1.0 起有 darkTheme 了，但暗色是**用户在 App 里手动开的**，不跟系统走。
+     而窗口背景是进程刚起来、Dart 还没跑的时候就要画出来的，那时没有任何办法知道
+     用户的选择 —— 所以这里永远用浅色底，亮暗两种设置下都不会闪。
+     （模板默认在夜间资源里用 Theme.Black.NoTitleBar，系统处于深色模式时会先黑闪。） -->
+<resources>
+    <style name="LaunchTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+    </style>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Time</string>
+
+    <!-- 桌面图标长按弹出的两项。ShortLabel 要短（建议 10 字以内，超了会被截断），
+         LongLabel 是长按拖出来时显示的那行 -->
+    <string name="shortcut_new">新增纪念日</string>
+    <string name="shortcut_new_long">记下一个值得记住的日子</string>
+    <string name="shortcut_timeline">时光轴</string>
+    <string name="shortcut_timeline_long">以今天为原点看全部记录</string>
+</resources>

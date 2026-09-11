@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面图标长按弹出的快捷方式。action 字符串要和 MainActivity.kt 里的常量逐字一致，
+     对不上就只是「点了没反应」，不报错 —— 所以两边都留了注释。
+     targetPackage / targetClass 必须是具体的应用 id（资源文件里用不了 ${applicationId} 占位符） -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_daily"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_new"
+        android:shortcutLongLabel="@string/shortcut_new_long">
+        <intent
+            android:action="com.muanyan.daily.action.NEW_DAILY"
+            android:targetPackage="com.muanyan.daily"
+            android:targetClass="com.muanyan.daily.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="timeline"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_timeline"
+        android:shortcutLongLabel="@string/shortcut_timeline_long">
+        <intent
+            android:action="com.muanyan.daily.action.TIMELINE"
+            android:targetPackage="com.muanyan.daily"
+            android:targetClass="com.muanyan.daily.MainActivity" />
+    </shortcut>
+</shortcuts>

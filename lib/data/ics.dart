@@ -1,0 +1,157 @@
+import 'dart:convert';
+
+import 'package:daily/model/daily.dart';
+import 'package:daily/model/repeat_rule.dart';
+import 'package:file_picker/file_picker.dart';
+
+/// 把一条记录导出成 `.ics`，交给系统日历去提醒。
+///
+/// 为什么要有这条出口：本地通知靠的是 App 自己活着 —— 国产 ROM 一杀后台，
+/// 到点就不响，而这是 App 修不好的（要用户去系统设置里手动开自启动）。
+/// 系统日历是系统自己管的，谁都杀不掉，所以「真要准时」这件事得有一条
+/// 交给系统的路。
+///
+/// 返回给用户看的一句话；返回 null 表示用户取消了保存，这时候不该弹提示。
+Future<String?> exportToCalendar(Daily daily) async {
+  final date = daily.date;
+  if (date == null) return '这条记录没有日期，导不进日历';
+
+  // 非重复记录还落在过去的话，日历里加它只是留个念想 —— 提前说清楚，
+  // 免得用户以为会响
+  final past = daily.repeatRule == RepeatRule.none && date.isBefore(_today());
+  final text = buildIcs(
+    daily,
+    stamp: DateTime.now().toUtc(),
+    // 没有闹钟的 VEVENT 在日历里就是个安静的全天事件
+    withAlarm: !past,
+  );
+
+  final Uri? target;
+  try {
+    // 和备份一样必须走 bytes：Android 上 `saveFile` 是 SAF，
+    // 由插件自己写文件，返回的 content:// 不能拿 dart:io 去写
+    target = await FilePicker.saveFile(
+      fileName: icsFileName(daily),
+      bytes: utf8.encode(text),
+      mimeType: 'text/calendar',
+      dialogTitle: '加入系统日历',
+    );
+  } catch (e) {
+    return '保存失败：$e';
+  }
+  if (target == null) return null;
+
+  return past ? '已导出一份历史记录，日历不会提醒它' : '已导出，打开它就能加进系统日历';
+}
+
+/// 生成一份只含一条事件的 iCalendar 文本。
+///
+/// 纯函数（时间由 [stamp] 注入），所以格式能被单测逐字锁住。
+/// 用的是 RFC 5545 那一套，注意换行必须是 CRLF —— 有些日历对 LF 直接不认。
+String buildIcs(Daily daily, {required DateTime stamp, bool withAlarm = true}) {
+  final date = daily.date;
+  final lines = <String>[
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Muanyan//Time//CN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    // 同一个 id 反复导出只会在日历里更新同一条，不会越导越多
+    'UID:time-${daily.id}@muanyan.daily',
+    'DTSTAMP:${_stamp(stamp)}',
+    if (date != null) 'DTSTART;VALUE=DATE:${_date(date)}',
+    'SUMMARY:${_escape(withAlarm ? daily.title : '${daily.title}（已过去）')}',
+    if (daily.headText.trim().isNotEmpty) 'DESCRIPTION:${_escape(daily.headText)}',
+    // DTSTART 已经是「第一次发生的那天」了（比如 1998 年的结婚日），
+    // 规则交给日历往前滚 —— 我们不排十年后的一次，日历会
+    ..._recurrence(daily.repeatRule),
+    if (withAlarm && date != null) ..._alarm(daily),
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+  return '${lines.map(_fold).join('\r\n')}\r\n';
+}
+
+/// 重复规则。不重复就一行都不写 —— 写了 `FREQ=DAILY` 那种才是灾难。
+List<String> _recurrence(RepeatRule rule) => switch (rule) {
+      RepeatRule.none => const [],
+      RepeatRule.yearly => const ['RRULE:FREQ=YEARLY'],
+      RepeatRule.monthly => const ['RRULE:FREQ=MONTHLY'],
+    };
+
+/// 提醒。全天事件的 DTSTART 是当天 00:00，所以「提前 N 天的 9 点」
+/// 就是 `-(P{N}DT9H)` —— 时长写成一段，别拆成两条 TRIGGER。
+List<String> _alarm(Daily daily) {
+  final days = daily.remindDaysBefore;
+  final duration = days > 0 ? 'P${days}DT${daily.remindHour}H' : 'PT${daily.remindHour}H';
+  return [
+    'BEGIN:VALARM',
+    'TRIGGER:-$duration',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:${_escape(daily.title)}',
+    'END:VALARM',
+  ];
+}
+
+/// `.ics` 的文件名。用户会在文件管理器里看到它，所以要能认出是哪一条；
+/// 但标题里的 `/` `:` 这些在文件名里是非法的，得先换掉。
+String icsFileName(Daily daily) {
+  final cleaned = daily.title
+      .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  final stem = cleaned.isEmpty ? 'time-${daily.id}' : cleaned;
+  // 文件系统那一关的宽度限制（255 字节）留够余量：中文一个字三个字节
+  final capped = stem.length > 40 ? stem.substring(0, 40) : stem;
+  return '$capped.ics';
+}
+
+/// TEXT 值里这几个字符必须转义，否则会被当成结构符号解析。
+String _escape(String value) => value
+    .replaceAll('\\', r'\\')
+    .replaceAll(';', r'\;')
+    .replaceAll(',', r'\,')
+    .replaceAll('\r\n', r'\n')
+    .replaceAll('\n', r'\n');
+
+String _date(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}${d.month.toString().padLeft(2, '0')}'
+    '${d.day.toString().padLeft(2, '0')}';
+
+String _stamp(DateTime utc) =>
+    '${_date(utc)}T${utc.hour.toString().padLeft(2, '0')}'
+    '${utc.minute.toString().padLeft(2, '0')}'
+    '${utc.second.toString().padLeft(2, '0')}Z';
+
+/// RFC 5545 要求一行最多 75 个**八位组**，超了要折行（续行以一个空格开头）。
+///
+/// 不能按字符数数：一个汉字是三个字节，按字符数折出来的行早超了。
+/// 更不能从多字节字符中间劈开 —— 那会写出一个非法的字节序列，
+/// 有的日历会因此拒收整个文件。
+String _fold(String line) {
+  const max = 75;
+  final out = StringBuffer();
+  var used = 0;
+  for (final rune in line.runes) {
+    final size = rune < 0x80
+        ? 1
+        : rune < 0x800
+            ? 2
+            : rune < 0x10000
+                ? 3
+                : 4;
+    if (used + size > max) {
+      // 续行开头那个空格也占一个八位组
+      out.write('\r\n ');
+      used = 1;
+    }
+    out.writeCharCode(rune);
+    used += size;
+  }
+  return out.toString();
+}
+
+DateTime _today() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}

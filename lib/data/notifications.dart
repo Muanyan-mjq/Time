@@ -1,0 +1,243 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:daily/constants.dart';
+import 'package:daily/data/daily_repository.dart';
+import 'package:daily/data/remind_plan.dart';
+import 'package:daily/data/settings.dart';
+import 'package:daily/model/daily.dart';
+import 'package:daily/utils/date_util.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+
+/// 提醒排班。
+///
+/// 策略是**全量取消 + 全量重排**，不做增量 diff。数据量只有几十条，全量重排
+/// 一次是毫秒级的；而增量要维护「这条改了什么、上次排的是哪一号」，一次对不上
+/// 就永久少一条提醒 —— 用户不会发现，直到那个日子安安静静地过去。
+///
+/// 重复记录**只排下一次**，不排十年后的。每次冷启动 / 改数据 / 回前台都重排，
+/// 等于让下一次自己往前滚。
+class NotificationService {
+  NotificationService._();
+
+  static final NotificationService instance = NotificationService._();
+
+  /// 常驻倒计时固定用这个 id，重排时整条替换。
+  static const int kOngoingId = 1;
+
+  /// 每条记录的提醒 id 从这儿往上分配，避开常驻那条。
+  static const int _dailyIdBase = 1000;
+
+  static const String _channelId = 'daily_remind';
+  static const String _channelName = '纪念日提醒';
+  static const String _ongoingChannelId = 'daily_ongoing';
+  static const String _ongoingChannelName = '倒计时常驻';
+
+  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+
+  bool _ready = false;
+
+  /// 通知被点开时要跳到哪条记录。null 表示没有待处理的目标。
+  ///
+  /// 用 notifier 而不是直接 push 路由：点通知可能发生在 App 还没起来的时候，
+  /// 那时既没有 Navigator 也还没读到数据。挂在这儿，等两边都就绪了再消费。
+  final ValueNotifier<int?> pendingOpen = ValueNotifier(null);
+
+  /// 精确闹钟权限被系统收回了。设置页据此如实提示，不假装还能准时。
+  final ValueNotifier<bool> exactAlarmDenied = ValueNotifier(false);
+
+  /// 通知权限被拒。同上，提示一次就够，不反复弹窗。
+  final ValueNotifier<bool> notificationDenied = ValueNotifier(false);
+
+  /// 冷启动时调一次。之后 `sync()` 由仓库的 items 变化驱动，不用手动记。
+  Future<void> initialize() async {
+    if (_ready) return;
+    try {
+      await _plugin.initialize(
+        settings: const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+        onDidReceiveNotificationResponse: _onTap,
+      );
+      _ready = true;
+    } catch (e, st) {
+      // 通知用不了不该拦住启动：App 其余部分完全用不着它
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'daily',
+        context: ErrorDescription('初始化本地通知'),
+      ));
+      return;
+    }
+
+    // 仓库每次写完自动刷新，列表一变就重排 —— 于是「新增 / 编辑 / 删除 /
+    // 备份导入」四条路径全都自动覆盖，不用在每处记得补一次重排
+    DailyRepository.instance.items.addListener(_onDataChanged);
+    Settings.instance.ongoingNotification.addListener(_onOngoingToggled);
+    await sync();
+  }
+
+  void _onDataChanged() => unawaited(sync());
+
+  void _onOngoingToggled() => unawaited(syncOngoing());
+
+  void _onTap(NotificationResponse response) {
+    final id = int.tryParse(response.payload ?? '');
+    if (id != null) pendingOpen.value = id;
+  }
+
+  /// 申请通知权限与精确闹钟权限。返回通知权限是否拿到。
+  ///
+  /// 只在用户第一次打开某条记录的提醒开关时调用 —— 一进 App 就弹权限框
+  /// 是最容易被拒绝的时机。
+  Future<bool> requestPermissions() async {
+    final android = _android;
+    if (android == null) return true;
+
+    final granted = await android.requestNotificationsPermission() ?? false;
+    notificationDenied.value = !granted;
+    if (!granted) return false;
+
+    // Android 14 起这条会跳到系统设置页。放在通知权限之后：前面那道都拒了，
+    // 再把人拽去设置页要精确闹钟就纯属骚扰
+    final exact = await android.requestExactAlarmsPermission() ?? false;
+    exactAlarmDenied.value = !exact;
+    return true;
+  }
+
+  /// 重读一遍系统给的权限状态，不弹框。
+  Future<void> refreshPermissionState() async {
+    final android = _android;
+    if (android == null) return;
+    notificationDenied.value = !(await android.areNotificationsEnabled() ?? true);
+    exactAlarmDenied.value = !(await android.canScheduleExactNotifications() ?? true);
+  }
+
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      Platform.isAndroid
+          ? _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          : null;
+
+  /// 全量重排。任何写操作、冷启动、回到前台、设置变更都会走到这儿。
+  Future<void> sync() async {
+    if (!_ready) return;
+    await refreshPermissionState();
+
+    try {
+      // 只取消「排着还没响」的，不用 cancelAll() —— 后者会把常驻倒计时一起抹掉
+      for (final p in await _plugin.pendingNotificationRequests()) {
+        if (p.id != kOngoingId) await _plugin.cancel(id: p.id);
+      }
+
+      final now = DateTime.now();
+      for (final daily in DailyRepository.instance.items.value) {
+        final at = remindMoment(daily, now);
+        if (at == null) continue;
+        await _plugin.zonedSchedule(
+          id: _dailyIdBase + daily.id,
+          scheduledDate: _instant(at),
+          notificationDetails: _reminderDetails,
+          // 权限被系统收回时自动降级成非精确 —— 晚几分钟也比不响强，
+          // 而设置页已经如实写了「当前不是精确提醒」
+          androidScheduleMode: exactAlarmDenied.value
+              ? AndroidScheduleMode.inexactAllowWhileIdle
+              : AndroidScheduleMode.exactAllowWhileIdle,
+          title: daily.headText.isEmpty ? daily.title : daily.headText,
+          body: _body(daily, now),
+          payload: '${daily.id}',
+        );
+      }
+
+      await syncOngoing();
+    } catch (e, st) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'daily',
+        context: ErrorDescription('重排纪念日提醒'),
+      ));
+    }
+  }
+
+  /// 把设备本地时刻交给插件。
+  ///
+  /// 用固定的 UTC 时区而不是 `tz.local`：插件把「墙上时间字符串 + 时区名」原样
+  /// 交给原生，由原生用 `ZoneId.of(名称)` 自己算出绝对时刻（见插件的
+  /// tz_datetime_mapper.dart 与 FlutterLocalNotificationsPlugin.java）。
+  /// `TZDateTime.from` 保留的是绝对时刻，所以拿 UTC 走一圈回来分毫不差，
+  /// 而 `tz.local` 需要先加载整个时区数据库、还得猜准本机的 IANA 名字 ——
+  /// 猜错（比如把 +08:00 猜成 Asia/Chongqing 之外的东西）就是提醒错几个小时。
+  ///
+  /// 代价是用户跨时区旅行时已排的闹钟仍按原绝对时刻响。提醒本来每次
+  /// 回到 App 就会重排，这个代价落不到实处。
+  tz.TZDateTime _instant(DateTime local) => tz.TZDateTime.from(local, tz.UTC);
+
+  /// 这条记录下次该在什么时候响。判断在 `remind_plan.dart`，那边可以单测。
+  String _body(Daily daily, DateTime now) {
+    final next = daily.nextDateFrom(now);
+    if (next == null) return daily.remark;
+    return '${countdownLabel(signedDaysFromToday(next, now: now))} · ${daily.title}';
+  }
+
+  NotificationDetails get _reminderDetails => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: '纪念日当天（或提前几天）提醒你',
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.reminder,
+        ),
+      );
+
+  /// 通知栏常驻倒计时：离今天最近的那条。
+  ///
+  /// 刻意**不开前台服务** —— 那要多一条 FOREGROUND_SERVICE 权限，而它做的事
+  /// 只是把一行字钉在通知栏。代价是 Android 14+ 用户可以手动划掉，这是对的：
+  /// 我们只在回到 App 或数据变化时重新贴上去，不做「划不掉」的流氓行为。
+  Future<void> syncOngoing() async {
+    if (!_ready) return;
+    try {
+      // 先撤掉旧的：开关刚被关掉时也得走这条路
+      await _plugin.cancel(id: kOngoingId);
+      if (!Settings.instance.ongoingNotification.value) return;
+
+      final now = DateTime.now();
+      final nearest = nearestReminder(DailyRepository.instance.items.value, now);
+      if (nearest == null) return;
+
+      await _plugin.show(
+        id: kOngoingId,
+        title: _body(nearest.daily, now),
+        body: '打开 $kAppName 看全部',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _ongoingChannelId,
+            _ongoingChannelName,
+            channelDescription: '把最近一个纪念日的倒计时钉在通知栏',
+            importance: Importance.low,
+            priority: Priority.low,
+            ongoing: true,
+            autoCancel: false,
+            showWhen: false,
+            onlyAlertOnce: true,
+            silent: true,
+            category: AndroidNotificationCategory.status,
+            visibility: NotificationVisibility.public,
+          ),
+        ),
+        payload: '${nearest.daily.id}',
+      );
+    } catch (e, st) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'daily',
+        context: ErrorDescription('更新常驻倒计时'),
+      ));
+    }
+  }
+}
