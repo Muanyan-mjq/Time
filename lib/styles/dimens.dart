@@ -54,7 +54,7 @@ const double kAboutMarkSize = 60;
 const double kAboutVersionTop = 160;
 const double kAboutVersionLeft = 60;
 
-/// 设置栏：6 行开关。
+/// 设置栏：5 行（3 个入口 + 通知栏倒计时、隐私锁两个开关）。
 ///
 /// bottom 那个 200 是为了让设置栏落在左下角青色圆斑上方 —— 它是量着圆斑
 /// 的高度给的，不是随手写的间距。开关行数只会越加越多，所以这一栏的高度
@@ -84,6 +84,9 @@ const double kAboutFooterInset = 20;
 /// 右下角两行小字和上面设置栏之间的空隙
 const double kAboutFooterGap = 8;
 
+/// 页脚「隐私协议 / 软件使用协议 / 官方地址」三条链接之间的空隙
+const double kAboutFooterLinkGap = 8;
+
 /// 左上角那道弧的画布，以及左下角圆斑的画布。
 ///
 /// 圆斑画布是个正方形，圆心取在它的底边中点上，所以绘画代码里读的是
@@ -91,21 +94,28 @@ const double kAboutFooterGap = 8;
 const double kAboutArcSize = 300;
 const double kAboutBlobSize = 200;
 
-/// 时光轴。
+/// 时光轴：左侧一条竖轴，未来在上、今天一道横标、过去在下，可以一直往下滚。
 ///
-/// 轴的两端各留这么多，最远那枚的标签才不会顶出屏幕 —— 它的圆心落在
-/// 半宽处，标签还要再往外伸半个宽度。
-const double kTimelineSideMargin = 56;
+/// 上一版是「整条轴钉在一屏里、靠双指放大看细节」的横轴，容量有天花板，
+/// 三十条以后只能靠缩放读。这一版把轴竖过来，滚动接管容量，每条记录也就
+/// 不必再把信息挤进 92px 的标签里。
 
-/// 轴上一枚的标签盒子。宽度定死是为了让「小圆点居中」这件事有个确定的
-/// 参照，否则每枚的宽度都随标题长短变，圆的落点就得反算文字宽度。
-const double kTimelineLabelWidth = 92;
-const double kTimelineLabelHeight = 40;
+/// 竖轴离左边的距离。它同时是打孔圆点的圆心 —— 圆点、年份刻度、
+/// 「今天」那枚实心点全压在这条线上。
+const double kTimelineAxisX = 30;
 
-/// 圆点直径、连着它的那根短线，以及同一侧错开的第二档。
-///
-/// 两档是因为对数刻度下临近的记录会挤在一起：只有一档的话，
-/// 1998 年和 1999 年的两个标签会叠成一团。
-const double kTimelineDot = 15;
-const double kTimelineStem = 20;
-const double kTimelineStemStep = 30;
+/// 压在轴上的封面圆点。30 是「看得清是什么照片」和「不挡住行」的折中。
+const double kTimelineDotSize = 30;
+
+/// 一条记录占的高度。**必须定高**：概览带的高亮、点按跳转、「回到今天」
+/// 的显隐全靠滚动位置反推行号，行高一浮动这套映射就得重来。
+const double kTimelineRowHeight = 64;
+
+/// 年份分隔行，以及「今天」那道横标。
+const double kTimelineYearRowHeight = 30;
+const double kTimelineTodayRowHeight = 44;
+
+/// 顶部概览带：把全部记录压成一条点带，看的是「一辈子摊开有多长、哪里密」。
+const double kTimelineBandHeight = 56;
+const double kTimelineBandPadding = 14;
+const double kTimelineBandDot = 5;

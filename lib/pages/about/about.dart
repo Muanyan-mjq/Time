@@ -18,7 +18,12 @@ import 'package:url_launcher/url_launcher.dart';
 const String _urlFeatures = kRepoUrl;
 const String _urlIssues = '$kRepoUrl/issues/new';
 const String _urlProfile = 'https://github.com/Muanyan-mjq';
-const String _urlAgreement = kRepoUrl;
+
+/// 这三个以前全指向仓库首页 —— 三个名字一个去处，点哪个都一样。
+/// 现在各指各的：隐私说明在 README 里，使用协议就是 MIT 的 LICENSE。
+const String _urlPrivacy = '$kRepoUrl#隐私';
+const String _urlLicense = '$kRepoUrl/blob/main/LICENSE';
+const String _urlHome = kRepoUrl;
 
 class About extends StatelessWidget {
   const About({super.key});
@@ -55,16 +60,16 @@ class About extends StatelessWidget {
                 size: const Size(kAboutArcSize, kAboutArcSize),
                 painter: MyPainterTopRight(
                   MediaQuery.sizeOf(context).width,
-                  MediaQuery.sizeOf(context).height,
+                  colors.aboutArc,
                 ),
               ),
             ),
-            const Positioned(
+            Positioned(
               bottom: 0,
               left: 0,
               child: CustomPaint(
-                size: Size(kAboutBlobSize, kAboutBlobSize),
-                painter: MyPainterBottomLeft(),
+                size: const Size(kAboutBlobSize, kAboutBlobSize),
+                painter: MyPainterBottomLeft(colors.aboutBlob),
               ),
             ),
             const Positioned(
@@ -127,7 +132,8 @@ class About extends StatelessWidget {
                           builder: (_) => const PosterPage(),
                         )),
                       ),
-                      _buildThemeItem(),
+                      // 深色模式不在这儿：首页那个弹层里已经有一个，同一件事
+                      // 摆两个入口，改起来还会互相打架
                       _buildOngoingItem(),
                       _buildLockItem(),
                     ],
@@ -146,9 +152,15 @@ class About extends StatelessWidget {
                     child: Text('Muanyan 温情出品', style: styles.aboutBottomStyle),
                   ),
                   const SizedBox(height: kAboutFooterGap),
-                  GestureDetector(
-                    onTap: () => _openUrl(context, _urlAgreement),
-                    child: Text('隐私协议 软件使用协议 官方地址', style: styles.aboutBottomStyle),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildFooterLink(context, styles, '隐私协议', _urlPrivacy),
+                      const SizedBox(width: kAboutFooterLinkGap),
+                      _buildFooterLink(context, styles, '软件使用协议', _urlLicense),
+                      const SizedBox(width: kAboutFooterLinkGap),
+                      _buildFooterLink(context, styles, '官方地址', _urlHome),
+                    ],
                   ),
                 ],
               ),
@@ -179,37 +191,18 @@ class About extends StatelessWidget {
     );
   }
 
-  /// 首页 FAB 弹层里那个开关之外，关于页也留一个入口 ——
-  /// 关于页是最像「设置」的地方，找主题的人第一反应会来这里
-  Widget _buildThemeItem() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: Settings.instance.darkMode,
-      builder: (context, dark, _) {
-        void toggle(bool value) {
-          unawaited(toggleFeedback());
-          unawaited(Settings.instance.setDarkMode(value));
-        }
-
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          // 整行都能点，不然只有那小滑块可点，很容易按空
-          onTap: () => toggle(!dark),
-          child: Row(
-            children: [
-              Icon(
-                dark ? Icons.brightness_2 : Icons.brightness_5,
-                size: kAboutSwitchIcon,
-                color: AppColors.of(context).onBackground,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('深色模式', style: AppTextStyles.of(context).aboutMiddleStyle),
-              ),
-              Switch(value: dark, onChanged: toggle),
-            ],
-          ),
-        );
-      },
+  /// 页脚的一条链接。三条各指各的 —— 以前三个名字挤在一个
+  /// `GestureDetector` 里，点哪儿都跳仓库首页。
+  Widget _buildFooterLink(
+    BuildContext context,
+    AppTextStyles styles,
+    String text,
+    String url,
+  ) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openUrl(context, url),
+      child: Text(text, style: styles.aboutBottomStyle),
     );
   }
 
@@ -303,21 +296,23 @@ class About extends StatelessWidget {
 }
 
 class MyPainterTopRight extends CustomPainter {
-  final double screenWitdh;
-  final double screenHeight;
+  final double screenWidth;
 
-  const MyPainterTopRight(this.screenWitdh, this.screenHeight);
+  /// 由 [AppColors] 给：亮色是 2020 年那道紫弧，暗色是压过饱和度的同一色相
+  final Color color;
+
+  const MyPainterTopRight(this.screenWidth, this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..isAntiAlias = true
-      ..color = const Color.fromRGBO(93, 92, 238, 0.9)
+      ..color = color
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 80
       ..style = PaintingStyle.stroke;
 
-    final center = Offset(screenWitdh - 30, 0);
+    final center = Offset(screenWidth - 30, 0);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: size.width / 2),
       pi / 2,
@@ -328,17 +323,20 @@ class MyPainterTopRight extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
+  bool shouldRepaint(MyPainterTopRight oldDelegate) =>
+      oldDelegate.screenWidth != screenWidth || oldDelegate.color != color;
 }
 
 class MyPainterBottomLeft extends CustomPainter {
-  const MyPainterBottomLeft();
+  final Color color;
+
+  const MyPainterBottomLeft(this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..isAntiAlias = true
-      ..color = const Color.fromRGBO(33, 255, 217, 1)
+      ..color = color
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 100
       ..style = PaintingStyle.fill;
@@ -348,5 +346,5 @@ class MyPainterBottomLeft extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
+  bool shouldRepaint(MyPainterBottomLeft oldDelegate) => oldDelegate.color != color;
 }

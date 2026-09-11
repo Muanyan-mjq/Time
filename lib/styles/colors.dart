@@ -22,6 +22,8 @@ class AppColors {
     required this.onBackgroundFaint,
     required this.divider,
     required this.highlight,
+    required this.aboutArc,
+    required this.aboutBlob,
   });
 
   /// 页面底色
@@ -54,6 +56,12 @@ class AppColors {
   /// 选中态描边
   final Color highlight;
 
+  /// 关于页右上角那道弧
+  final Color aboutArc;
+
+  /// 关于页左下角那团圆斑
+  final Color aboutBlob;
+
   static const AppColors light = AppColors(
     background: Color(0xFFFBFBFC),
     surface: Color(0xFFFFFFFF),
@@ -65,6 +73,9 @@ class AppColors {
     onBackgroundFaint: Color(0xFFBDBDBD),
     divider: Color(0xFFDBDBDB),
     highlight: Color(0xFF000000),
+    // 2020 年那版的取值，原样
+    aboutArc: Color.fromRGBO(93, 92, 238, 0.9),
+    aboutBlob: Color(0xFF21FFD9),
   );
 
   static const AppColors dark = AppColors(
@@ -78,6 +89,10 @@ class AppColors {
     onBackgroundFaint: Color(0xFF5A5A5E),
     divider: Color(0xFF2E2E2E),
     highlight: Color(0xFFEDEDED),
+    // 同一组色相，只把饱和度压下去：原值叠在 #121212 上是一道刺眼的霓虹，
+    // 而这两块是背景装饰，不该比正文还抢眼
+    aboutArc: Color.fromRGBO(93, 92, 238, 0.35),
+    aboutBlob: Color.fromRGBO(33, 255, 217, 0.22),
   );
 
   static AppColors of(BuildContext context) =>

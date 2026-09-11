@@ -104,6 +104,11 @@ String fmtStorage(DateTime d) =>
 /// 展示格式 `2026年9月10日`。
 String fmtDisplay(DateTime d) => '${d.year}年${d.month}月${d.day}日';
 
+/// 紧凑格式 `09-10`。时光轴上用它：年份由轴上的年份刻度交代，两边不重复，
+/// 一行也就摆得下标题、日期和倒计时三样东西。
+String fmtMonthDay(DateTime d) =>
+    '${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 /// 两位数计数，用于详情页的三个大数字。
 String fmt2(int n) => n < 10 ? '0$n' : '$n';
 

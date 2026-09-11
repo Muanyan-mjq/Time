@@ -116,6 +116,21 @@ class Daily {
     return next == null ? null : addDays(next, -remindDaysBefore);
   }
 
+  /// 详情页右下角那行状态：「重复规则 · 提醒」。
+  ///
+  /// 这两件事以前只有编辑页看得到，而点开一条记录最想确认的恰恰是
+  /// 「它到底会不会提醒我」。以前占着这个位置的是倒计时，而它和中间
+  /// 那排大数字说的是同一件事。
+  ///
+  /// 文案刻意比表单里紧凑（`提前3天` 不是 `提前 3 天`）：这一行要和左边的
+  /// 日期挤在同一行里，多两个空格就会把日期顶到省略号上去。
+  String get scheduleLabel {
+    final rule = repeatRule.label;
+    if (!remindEnabled) return '$rule · 不提醒';
+    final when = remindDaysBefore == 0 ? '当天' : '提前$remindDaysBefore天';
+    return '$rule · $when ${fmt2(remindHour)}:${fmt2(remindMinute)}';
+  }
+
   Daily copyWith({
     int? id,
     String? title,

@@ -55,6 +55,20 @@ void main() {
       );
       expect(AppColors.light.divider, isNot(AppColors.dark.divider), reason: 'divider');
       expect(AppColors.light.highlight, isNot(AppColors.dark.highlight), reason: 'highlight');
+      expect(AppColors.light.aboutArc, isNot(AppColors.dark.aboutArc), reason: 'aboutArc');
+      expect(AppColors.light.aboutBlob, isNot(AppColors.dark.aboutBlob), reason: 'aboutBlob');
+    });
+
+    test('关于页那两块装饰原样保留亮色的 2020 取值', () {
+      expect(AppColors.light.aboutArc, const Color.fromRGBO(93, 92, 238, 0.9));
+      expect(AppColors.light.aboutBlob, const Color(0xFF21FFD9));
+      // 暗色是同一组色相压过饱和度的版本，不是换个颜色
+      expect(AppColors.dark.aboutArc.r, AppColors.light.aboutArc.r);
+      expect(AppColors.dark.aboutArc.g, AppColors.light.aboutArc.g);
+      expect(AppColors.dark.aboutArc.b, AppColors.light.aboutArc.b);
+      expect(AppColors.dark.aboutBlob.r, AppColors.light.aboutBlob.r);
+      expect(AppColors.dark.aboutBlob.g, AppColors.light.aboutBlob.g);
+      expect(AppColors.dark.aboutBlob.b, AppColors.light.aboutBlob.b);
     });
   });
 

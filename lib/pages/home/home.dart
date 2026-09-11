@@ -410,7 +410,7 @@ class _HomeState extends State<Home> {
       case _CardAction.edit:
         await _pushScale(context, DailyFormPage(daily: daily));
       case _CardAction.poster:
-        await _pushScale(context, PosterPage(daily: daily));
+        _openPoster(context, focus: daily);
       case _CardAction.calendar:
         await _addToCalendar(daily);
       case _CardAction.delete:
@@ -443,12 +443,19 @@ class _HomeState extends State<Home> {
     if (mounted) showToast('删除成功');
   }
 
-  void _openPoster(BuildContext context) {
-    // 不带具体纪念日时挑离今天最近的那条。
-    // 列表已经在监听里了，不用再查一次库。
+  /// 打开分享海报。带 [focus] 就停在那一张，否则停在离今天最近的那张 ——
+  /// 列表顺序和「未来 / 已过去」两组一致，最近的那条永远在下标 0。
+  ///
+  /// 整表都递过去，海报页可以左右滑着换记录，不用退出来重新长按。
+  void _openPoster(BuildContext context, {Daily? focus}) {
     final groups = groupDailies(DailyRepository.instance.items.value);
-    final nearest = groups.isEmpty ? null : groups.first.items.first.daily;
-    _pushScale(context, PosterPage(daily: nearest));
+    final dailies = [for (final g in groups) ...g.items.map((e) => e.daily)];
+    var index = 0;
+    if (focus != null) {
+      final at = dailies.indexWhere((d) => d.id == focus.id);
+      if (at > 0) index = at;
+    }
+    _pushScale(context, PosterPage(dailies: dailies, initialIndex: index));
   }
 
   /// 备份与恢复的二级弹层。

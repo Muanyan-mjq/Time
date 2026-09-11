@@ -44,6 +44,11 @@ class DailyCoverCard extends StatelessWidget {
   /// 右上角，详情页放「编辑」。
   final Widget? trailing;
 
+  /// 右下角。给了它就不再画倒计时 —— 详情页用它放「重复 · 提醒」状态行。
+  ///
+  /// 它按自身宽度摆放，不参与伸缩：地方不够时先挤左边的日期。
+  final Widget? bottomTrailing;
+
   /// 中间区域，详情页放可点按的计数。
   final Widget? middle;
 
@@ -59,6 +64,7 @@ class DailyCoverCard extends StatelessWidget {
     this.parallax,
     this.isToday = false,
     this.trailing,
+    this.bottomTrailing,
     this.middle,
   });
 
@@ -141,7 +147,16 @@ class DailyCoverCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (signedDays != null)
+                    // 不能包 Flexible：那样它和左边的日期会各分到一半宽度
+                    // （两个 flex:1），「每年 · 提前3天 09:00」在 360 宽的屏上
+                    // 直接被省略号截掉半句。让它按自身宽度摆，日期负责伸缩
+                    if (bottomTrailing != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: bottomTrailing!,
+                      )
+                    // 当天那句「就是今天」由右上角徽章说，这里不再重复第二遍
+                    else if (signedDays != null && signedDays != 0)
                       Text(countdownLabel(signedDays!), style: AppTextStyles.countdownStyle),
                   ],
                 ),

@@ -13,7 +13,7 @@ const String kAppSubName = '时光';
 const String kAppSlogan = '每一个平凡的日子，都值得纪念';
 
 /// 与 pubspec.yaml 的 version 保持一致。
-const String kAppVersion = '1.1.0';
+const String kAppVersion = '1.1.1';
 
 /// 表单留空时的默认文案，2020 年就是这个，不要改。
 const String kDefaultHeadText = '生如夏花之灿烂';

@@ -9,7 +9,6 @@ import 'package:daily/pages/daily_form.dart';
 import 'package:daily/pages/photo_view.dart';
 import 'package:daily/styles/colors.dart';
 import 'package:daily/styles/dimens.dart';
-import 'package:daily/styles/iconfont.dart';
 import 'package:daily/styles/text_style.dart';
 import 'package:daily/utils/date_util.dart';
 import 'package:daily/utils/haptics.dart';
@@ -54,9 +53,6 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
   /// 会把它当成「就是今天」，于是放彩纸、亮徽章、写「就是今天」，
   /// 而卡片上明明白白写着「日期待补充」—— 自相矛盾。
   late bool _hasDate;
-
-  /// 倒计时指向过去 → true。等价于老代码的 `todayIsLateTarget`。
-  bool get _isPast => _signedDays < 0;
 
   /// 就是今天。彩纸和呼吸光只在这种情况下出现。
   bool get _isToday => _hasDate && _signedDays == 0;
@@ -135,6 +131,7 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
                         signedDays: _signedDays,
                         isToday: _isToday,
                         trailing: _buildEditButton(),
+                        bottomTrailing: _buildScheduleLabel(),
                         middle: _buildCounter(width),
                       ),
                     ),
@@ -190,21 +187,52 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
     );
   }
 
+  /// 右下角的状态行：重复规则 + 提醒时刻。
+  ///
+  /// 这个位置原来是倒计时，和中间那排大数字说同一件事；换成的这两件事
+  /// 以前只有编辑页看得到。
+  Widget _buildScheduleLabel() {
+    return Text(
+      _daily.scheduleLabel,
+      textAlign: TextAlign.right,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTextStyles.countdownStyle.copyWith(fontSize: 14),
+    );
+  }
+
   /// 点按切换年月日 / 总天数。原来的 3 秒自动轮播 + 每秒一次 setState
   /// 已经删掉 —— 静置一分钟白烧 60 帧。
   Widget _buildCounter(double sceneWidth) {
+    // 起始日就是今天：两种视图是同一句话，没有可切换的第二种说法
+    final startsToday = _hasDate && _ageDays == 0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        unawaited(toggleFeedback());
-        setState(() => _showYmd = !_showYmd);
-      },
+      onTap: startsToday
+          ? null
+          : () {
+              unawaited(toggleFeedback());
+              setState(() => _showYmd = !_showYmd);
+            },
       child: Center(
         child: RollIn(
           // 值一变就重播一次滚入
-          value: _showYmd ? 'ymd' : 'days',
-          child: _showYmd ? _buildYmd(sceneWidth) : _buildTotalDays(sceneWidth),
+          value: startsToday ? 'today' : (_showYmd ? 'ymd' : 'days'),
+          child: startsToday
+              ? _buildStartsToday(sceneWidth)
+              : (_showYmd ? _buildYmd(sceneWidth) : _buildTotalDays(sceneWidth)),
         ),
+      ),
+    );
+  }
+
+  /// 起始日就是今天。摆一串 00年00月00日 只会让人以为数据坏了。
+  Widget _buildStartsToday(double sceneWidth) {
+    return SizedBox(
+      width: (sceneWidth - 36) * 0.6,
+      height: 80,
+      child: const Center(
+        child: Text('从今天开始', style: AppTextStyles.countTitleStyle),
       ),
     );
   }
@@ -213,17 +241,6 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
   /// 倒计时看的是「还有多久」，两边由不同的数得出。
   Widget _buildYmd(double sceneWidth) {
     if (!_hasDate) return _buildMissingDate(sceneWidth);
-    // 满 0 天时不显示 00年00月00日。这里用年龄天数而不是倒计时天数：
-    // 一条 1998 年起每年重复的记录，在周年日当天倒计时是 0，年龄是 28 年。
-    if (_ageDays == 0) {
-      return SizedBox(
-        width: (sceneWidth - 36) * 0.6,
-        height: 80,
-        child: const Center(
-          child: Text('就是今天', style: AppTextStyles.countTitleStyle),
-        ),
-      );
-    }
     return SizedBox(
       width: (sceneWidth - 36) * 0.6,
       height: 80,
@@ -251,19 +268,26 @@ class _HeroDetailPageState extends State<HeroDetailPage> {
     );
   }
 
-  /// 距离目标日的总天数
+  /// 距离目标日的总天数。
+  ///
+  /// 「还有 / 已经」得写出来：右下角那句倒计时换成状态行之后，这里是全页
+  /// 唯一显示倒计时的地方，而单独的「123 天」看不出方向。
   Widget _buildTotalDays(double sceneWidth) {
     if (!_hasDate) return _buildMissingDate(sceneWidth);
+    final days = _signedDays;
     return SizedBox(
       width: (sceneWidth - 36) * 0.6,
       height: 80,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(fmt2(_signedDays.abs()), style: AppTextStyles.countTitleStyle),
+          if (days != 0) ...[
+            Text(days > 0 ? '还有' : '已经', style: AppTextStyles.countBottomTipStyle),
+            const SizedBox(width: 8),
+          ],
+          Text(fmt2(days.abs()), style: AppTextStyles.countTitleStyle),
           const SizedBox(width: 2),
           const Text('天', style: AppTextStyles.countBottomTipStyle),
-          Icon(_isPast ? Iconfont.up2 : Iconfont.down1, color: Colors.white, size: 14),
         ],
       ),
     );
