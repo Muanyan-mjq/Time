@@ -1,0 +1,28 @@
+{
+  "name": "time-promo-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Time · 时光 竖屏宣传视频 (Remotion)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "compositions": "remotion compositions src/index.ts",
+    "render": "remotion render src/index.ts TimePromo ../out/time-promo-1080p.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --audio-codec=aac",
+    "render:4k": "remotion render src/index.ts TimePromo ../out/time-promo.mp4 --scale=2 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --audio-codec=aac",
+    "still": "remotion still src/index.ts TimePromo",
+    "qr": "node src/scripts/make-qr.mjs",
+    "bgm": "python src/scripts/make-bgm.py"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.543",
+    "@remotion/fonts": "4.0.543",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.543"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "qrcode": "1.5.4",
+    "typescript": "5.6.3"
+  }
+}
