@@ -14,8 +14,8 @@
 
 ## 宣传视频
 
-- [45 秒竖屏宣传片 · 4K（2160×3840）](./out/time-promo.mp4)
-- [1080×1920 标准版](./out/time-promo-1080p.mp4) · [15 秒精简版](./out/time-promo-short.mp4)
+- [45 秒竖屏宣传片 · 4K 终版（2160×3840）](./out/time-promo-4k.mp4)
+- [1080×1920 标准版](./out/time-promo.mp4) · [15 秒精简版](./out/time-promo-short.mp4)
 - 封面：[1080p](./out/time-cover.png) · [4K](./out/time-cover-4k.png)
 - Remotion 源码、文案配置与再渲染方法见 [`promo/`](./promo/)
 

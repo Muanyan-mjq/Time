@@ -6,8 +6,8 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "compositions": "remotion compositions src/index.ts",
-    "render": "remotion render src/index.ts TimePromo ../out/time-promo-1080p.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --audio-codec=aac",
-    "render:4k": "remotion render src/index.ts TimePromo ../out/time-promo.mp4 --scale=2 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --audio-codec=aac",
+    "render": "remotion render src/index.ts TimePromo ../out/time-promo.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --audio-codec=aac",
+    "render:4k": "remotion render src/index.ts TimePromo ../out/time-promo-4k.mp4 --scale=2 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --audio-codec=aac",
     "still": "remotion still src/index.ts TimePromo",
     "qr": "node src/scripts/make-qr.mjs",
     "bgm": "python src/scripts/make-bgm.py"
